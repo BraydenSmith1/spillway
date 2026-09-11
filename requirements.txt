@@ -9,6 +9,7 @@ numpy==2.5.1
 # --- ERCOT API access ---
 requests==2.34.2
 python-dotenv==1.2.2       # loads credentials from .env
+gridstatus==0.36.0         # used by download_sced.py for 60-day disclosures
 
 # --- Database (TimescaleDB / Postgres) ---
 SQLAlchemy==2.0.51

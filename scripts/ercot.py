@@ -88,20 +88,23 @@ def probe(endpoint, params=None):
     return r.json()
 
 
-def fetch(endpoint, params=None, max_pages=5000, verbose=False, max_retries=8):
+def iter_pages(endpoint, params=None, max_pages=5000, max_retries=8,
+               start_page=1, log=None, log_every=50):
     """
-    Download a whole dataset, following pagination.
-    Returns a pandas DataFrame.
+    Yield one API page at a time as (page, total_pages, batch, cols).
 
-    Raises if the dataset has more than max_pages pages, rather than
-    silently returning a partial result — some ERCOT endpoints (nodal
-    LMP, shadow prices) run into the millions of rows for a single month.
+    Streaming instead of accumulating means a caller can save progress as it
+    goes, so an interrupted download costs minutes instead of hours — and a
+    million-row month never has to fit in memory all at once.
+
+    start_page lets a caller resume where it left off.
     """
     p = dict(params or {})
     p.setdefault("size", 5000)
-    rows, cols, page = [], None, 1
+    cols, page = None, start_page
     total_pages = total_records = None
     retries = 0
+    seen = 0
 
     while page <= max_pages:
         p["page"] = page
@@ -149,31 +152,56 @@ def fetch(endpoint, params=None, max_pages=5000, verbose=False, max_retries=8):
 
         batch = body.get("data") or []
         if not batch:
-            break
-        rows.extend(batch)
+            return
 
         meta = body.get("_meta") or {}
         total_pages = meta.get("totalPages", page)
-        total_records = meta.get("totalRecords", len(rows))
-        if verbose:
-            print(f"    page {page}/{total_pages}, {len(rows):,} rows so far")
+        total_records = meta.get("totalRecords", seen)
+        seen += len(batch)
+
+        # Progress every log_every pages, so a long month is visibly alive
+        # rather than silent for hours.
+        if log and (page == start_page or page % log_every == 0):
+            log(f"      page {page}/{total_pages}, {seen:,} rows this pass")
+
+        yield page, total_pages, batch, cols
+
         if page >= total_pages:
-            break
+            return
         page += 1
         time.sleep(0.25)
-    else:
-        raise RuntimeError(
-            f"Truncated: hit max_pages={max_pages} with only "
-            f"{len(rows):,} of {total_records:,} rows ({page - 1}/{total_pages} "
-            "pages) fetched. Narrow the date range or raise max_pages."
-        )
 
+    raise RuntimeError(
+        f"Truncated: hit max_pages={max_pages} with only "
+        f"{seen:,} of {total_records:,} rows ({page - 1}/{total_pages} "
+        "pages) fetched. Narrow the date range or raise max_pages."
+    )
+
+
+def to_frame(rows, cols=None):
+    """Turn raw API rows into a DataFrame, list- or dict-shaped."""
     if not rows:
         return pd.DataFrame()
-
     # Rows may be lists (needing `cols`) or dicts (self-describing).
     if isinstance(rows[0], dict):
         return pd.DataFrame(rows)
     if cols and len(cols) == len(rows[0]):
         return pd.DataFrame(rows, columns=cols)
     return pd.DataFrame(rows)   # last resort: numbered columns
+
+
+def fetch(endpoint, params=None, max_pages=5000, verbose=False, max_retries=8):
+    """
+    Download a whole dataset, following pagination.
+    Returns a pandas DataFrame.
+
+    Convenience wrapper around iter_pages() for small datasets. For anything
+    large, prefer iter_pages() so progress can be saved incrementally.
+    """
+    rows, cols = [], None
+    for _page, _total, batch, page_cols in iter_pages(
+            endpoint, params, max_pages=max_pages, max_retries=max_retries,
+            log=print if verbose else None):
+        rows.extend(batch)
+        cols = page_cols or cols
+    return to_frame(rows, cols)

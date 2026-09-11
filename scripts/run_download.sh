@@ -1,14 +1,56 @@
 #!/bin/bash
-# run_download.sh — runs download_all.py under caffeinate, and restarts it
-# automatically if it ever dies (network drop, crash, etc). Safe to re-run:
-# download_all.py skips months already on disk.
+# run_download.sh — keeps the ERCOT download running unattended.
+#
+#   caffeinate -dimsu  prevents display / idle / disk / system sleep.
+#     ⚠️  On BATTERY, macOS still sleeps when the lid closes — no software
+#         flag overrides that. Keep the laptop plugged in.
+#
+#   Watchdog: a process hung on a dead socket never exits, so restarting
+#     "on exit" isn't enough. If the log goes silent for STALL_SECS we
+#     assume it's wedged, kill it, and start over. download.py resumes
+#     from the last saved chunk, so a restart costs minutes at most.
 
+set -u
 cd "$(dirname "$0")/.."
+
+LOG="logs/download_all.out"
+STALL_SECS=900      # 15 minutes of silence = assumed hung
+POLL=60
+
+# Re-exec once under caffeinate so every child process is covered.
+if [ -z "${UNDER_CAFFEINATE:-}" ]; then
+    export UNDER_CAFFEINATE=1
+    exec caffeinate -dimsu "$0" "$@"
+fi
+
+mkdir -p logs
 source .venv/bin/activate
 
+stamp() { date '+%Y-%m-%d %H:%M:%S'; }
+log_mtime() { stat -f %m "$LOG" 2>/dev/null || echo 0; }
+
+if pmset -g batt 2>/dev/null | grep -q "Battery Power"; then
+    echo "$(stamp)  ⚠️  WARNING: running on battery. macOS will sleep on lid" >> "$LOG"
+    echo "$(stamp)      close and the download will stall. Plug in." >> "$LOG"
+fi
+
 while true; do
-    echo "$(date '+%Y-%m-%d %H:%M:%S')  starting download_all.py" >> logs/download_all.out
-    caffeinate -i python -u scripts/download_all.py >> logs/download_all.out 2>&1
-    echo "$(date '+%Y-%m-%d %H:%M:%S')  download_all.py exited (code $?) — restarting in 30s" >> logs/download_all.out
+    echo "$(stamp)  starting download_all.py" >> "$LOG"
+    python -u scripts/download_all.py >> "$LOG" 2>&1 &
+    PID=$!
+
+    # Watch for stalls while it runs.
+    while kill -0 "$PID" 2>/dev/null; do
+        sleep "$POLL"
+        AGE=$(( $(date +%s) - $(log_mtime) ))
+        if [ "$AGE" -gt "$STALL_SECS" ]; then
+            echo "$(stamp)  no output for ${AGE}s — assuming hung, restarting" >> "$LOG"
+            kill -9 "$PID" 2>/dev/null
+            break
+        fi
+    done
+
+    wait "$PID" 2>/dev/null
+    echo "$(stamp)  download_all.py exited — restarting in 30s" >> "$LOG"
     sleep 30
 done

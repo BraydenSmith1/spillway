@@ -109,6 +109,4 @@ spillway/
 
 <!-- TODO: 3-5 charts and what they show. This section is what people actually read. -->
 
-## License
 
-<!-- TODO: MIT is a reasonable default for a portfolio project. -->
