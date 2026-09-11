@@ -14,7 +14,11 @@ set -u
 cd "$(dirname "$0")/.."
 
 LOG="logs/download_all.out"
-STALL_SECS=900      # 15 minutes of silence = assumed hung
+# 30 min of silence = assumed hung. This must stay comfortably above the
+# time between progress log lines, or the watchdog kills healthy work: at
+# 900s it once killed a job 1,600 pages into a 1,798-page month, because
+# slow pages pushed the gap between log lines right up against the limit.
+STALL_SECS=1800
 POLL=60
 
 # Re-exec once under caffeinate so every child process is covered.

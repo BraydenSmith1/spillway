@@ -89,7 +89,7 @@ def probe(endpoint, params=None):
 
 
 def iter_pages(endpoint, params=None, max_pages=5000, max_retries=8,
-               start_page=1, log=None, log_every=50):
+               start_page=1, log=None, log_every=10):
     """
     Yield one API page at a time as (page, total_pages, batch, cols).
 

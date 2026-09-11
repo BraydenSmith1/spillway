@@ -16,10 +16,17 @@ from ercot import iter_pages, to_frame
 
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 
-# Pages held in memory before being written to a chunk file. 100 pages of
-# 5,000 rows is ~500k rows — a few minutes of work, the most an interruption
-# can cost.
-CHUNK_PAGES = 100
+# Pages held in memory before being written to a chunk file. 10 pages of
+# 50,000 rows is ~500k rows — a few minutes of work, the most an interruption
+# can cost. Keep CHUNK_PAGES * page_size around this size: too large and an
+# interruption is expensive, too small and we write thousands of tiny files.
+CHUNK_PAGES = 10
+
+# ERCOT accepts pages far larger than the 5,000 this project started with —
+# tested good to 200,000. Each request costs roughly the same regardless of
+# size, so bigger pages mean proportionally fewer round trips: a month of
+# nodal LMP drops from ~1,800 requests to under 200.
+PAGE_SIZE = 50_000
 
 
 def _flush(part_dir, page, rows, cols):
@@ -43,7 +50,7 @@ def _resume_point(part_dir):
 
 
 def download_monthly(name, endpoint, from_param, to_param,
-                     start="2025-09-01", end="2026-10-01", page_size=5000,
+                     start="2025-09-01", end="2026-10-01", page_size=PAGE_SIZE,
                      log=print):
     out_dir = RAW / name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -54,7 +61,16 @@ def download_monthly(name, endpoint, from_param, to_param,
         m1 = months[i + 1]
         tag = m0.strftime("%Y-%m")
         out = out_dir / f"{name}_{tag}.parquet"
-        part_dir = out_dir / f".partial_{tag}"
+
+        # Chunk files are numbered by page, so chunks written at one page size
+        # point at the wrong offsets if resumed at another. Making the size
+        # part of the directory name means a size change starts clean instead
+        # of silently stitching together mismatched data.
+        part_dir = out_dir / f".partial_{tag}_s{page_size}"
+        for old in out_dir.glob(f".partial_{tag}*"):
+            if old != part_dir:
+                log(f"  {tag}: discarding chunks from a different page size")
+                shutil.rmtree(old, ignore_errors=True)
 
         # A month whose window extends past today is still in progress —
         # always re-fetch it, even if a (partial) file already exists,
