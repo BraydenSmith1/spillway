@@ -56,6 +56,31 @@ JOBS = [
         "from":     "postedDatetimeFrom",
         "to":       "postedDatetimeTo",
     },
+    # --- day-ahead market: hourly, so small. The DA/RT spread is what
+    #     storage arbitrage and hedging actually trade on. ---
+    {
+        "name":     "dam_settlement_point_prices",
+        "endpoint": "/np4-190-cd/dam_stlmnt_pnt_prices",
+        "from":     "deliveryDateFrom",
+        "to":       "deliveryDateTo",
+    },
+    {
+        "name":     "dam_shadow_prices",
+        "endpoint": "/np4-191-cd/dam_shadow_prices",
+        "from":     "deliveryDateFrom",
+        "to":       "deliveryDateTo",
+    },
+    # DAM Hourly LMPs: ~13.9M rows/month because it is priced per electrical
+    # bus (~20k of them) rather than per settlement point, so it does not join
+    # cleanly to the rest of this project and costs ~18 hours to pull. Enable
+    # only if you need bus-level day-ahead detail.
+    # {
+    #     "name":     "dam_hourly_lmp",
+    #     "endpoint": "/np4-183-cd/dam_hourly_lmp",
+    #     "from":     "deliveryDateFrom",
+    #     "to":       "deliveryDateTo",
+    # },
+
     # --- slow datasets last: SCED 5-minute granularity, millions of rows/month ---
     {
         "name":     "lmp_resource_nodes",
