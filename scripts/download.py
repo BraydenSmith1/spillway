@@ -29,6 +29,12 @@ CHUNK_PAGES = 10
 PAGE_SIZE = 50_000
 
 
+def _is_timestamp_param(name):
+    """True for SCEDTimestampFrom / postedDatetimeFrom style parameters."""
+    n = name.lower()
+    return "timestamp" in n or "datetime" in n
+
+
 def _flush(part_dir, page, rows, cols):
     """Write buffered rows to a numbered chunk file."""
     if not rows:
@@ -99,11 +105,20 @@ def download_monthly(name, endpoint, from_param, to_param,
             log(f"  {tag}: resuming at page {start_page} "
                 f"({n_parts} chunks already saved)")
 
-        params = {
-            from_param: m0.strftime("%Y-%m-%d"),
-            to_param: (m1 - pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-            "size": page_size,
-        }
+        # ERCOT has two flavours of range parameter and they do NOT behave the
+        # same way. A *Date* param ("deliveryDateTo") is inclusive of the whole
+        # day. A *Timestamp* / *Datetime* param ("SCEDTimestampTo") reads a
+        # bare date as midnight, so the last day of the range comes back empty
+        # — silently losing one day in every month.
+        last_day = m1 - pd.Timedelta(days=1)
+        if _is_timestamp_param(from_param):
+            lo = m0.strftime("%Y-%m-%dT00:00:00")
+            hi = last_day.strftime("%Y-%m-%dT23:59:59")
+        else:
+            lo = m0.strftime("%Y-%m-%d")
+            hi = last_day.strftime("%Y-%m-%d")
+
+        params = {from_param: lo, to_param: hi, "size": page_size}
 
         buf, cols, last_page = [], None, start_page - 1
         try:
