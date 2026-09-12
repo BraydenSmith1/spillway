@@ -17,5 +17,5 @@ psycopg2-binary>=2.9       # NOT YET INSTALLED — scripts/db.py needs this
 
 # --- Analysis & exploration ---
 matplotlib==3.11.1
-duckdb>=1.0                # NOT YET INSTALLED — query Parquet directly with SQL
+duckdb==1.5.5              # query Parquet directly with SQL, no server needed
 jupyter>=1.0               # NOT YET INSTALLED — for notebooks/
