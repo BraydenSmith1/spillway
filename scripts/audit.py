@@ -19,6 +19,8 @@ RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 # into the future, which would overstate what we actually hold.
 DATE_COL = {
     "settlement_point_prices":           "deliveryDate",
+    "dam_settlement_point_prices":       "deliveryDate",
+    "dam_shadow_prices":                 "deliveryDate",
     "lmp_resource_nodes":                "SCEDTimestamp",
     "shadow_prices":                     "SCEDTimestamp",
     "solar_production":                  "deliveryDate",
@@ -63,10 +65,12 @@ def summarize_gaps(missing, limit=6):
     return ", ".join(out)
 
 
-def audit_sced(files):
-    """sced_60day is one file per day — read dates from filenames, not content."""
-    days = sorted(date.fromisoformat(f.stem.replace("gen_resource_", ""))
-                  for f in files)
+# One file per day, dated in the filename — no need to read contents.
+DAILY = {"sced_60day": "gen_resource_", "sced_esr": "esr_"}
+
+
+def audit_daily(files, prefix):
+    days = sorted(date.fromisoformat(f.stem.replace(prefix, "")) for f in files)
     rows = sum(pq.ParquetFile(f).metadata.num_rows for f in files)
     return days, rows
 
@@ -100,8 +104,8 @@ def main():
         size = sum(f.stat().st_size for f in files)
         col = DATE_COL.get(d.name)
 
-        if d.name == "sced_60day":
-            days, rows = audit_sced(files)
+        if d.name in DAILY:
+            days, rows = audit_daily(files, DAILY[d.name])
             col = "filename"
         elif col:
             days, rows = audit_generic(files, col)
