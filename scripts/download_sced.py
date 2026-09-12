@@ -18,7 +18,34 @@ import os
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
+import gridstatus.ercot as _ge
 from gridstatus.ercot_api.ercot_api import ErcotAPI
+
+# ---------------------------------------------------------------------------
+# Workaround: ERCOT changed the ancillary-service offer files around
+# 2026-06-25 in a way gridstatus 0.36.0 (the latest release) does not
+# recognise. Its classifier sorts every AS offer curve into Online / Offline /
+# Regulation Down and raises "Unknown curve type found" if any row matches
+# none — which throws away the ENTIRE day, including the generator and storage
+# data we actually want. That silently blocked every day from 2026-06-25 on.
+#
+# We only suppress that one error, and only for the AS-offer dataset, which
+# this script does not save. Generator and ESR parsing are untouched. Remove
+# this once a gridstatus release handles the new curve type.
+# ---------------------------------------------------------------------------
+_orig_as_offers = _ge.process_sced_resource_as_offers
+
+
+def _tolerant_as_offers(*args, **kwargs):
+    try:
+        return _orig_as_offers(*args, **kwargs)
+    except ValueError as e:
+        if "Unknown curve type" not in str(e):
+            raise
+        return None
+
+
+_ge.process_sced_resource_as_offers = _tolerant_as_offers
 
 load_dotenv()
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -41,7 +68,7 @@ start = pd.Timestamp("2023-08-01", tz="US/Central")
 # ESR rows, 2025-12-10 returns 90,770. Batteries got their own SCED disclosure
 # when real-time co-optimization went live. Reaching back further just
 # re-downloads ~47 MB archives to find no storage report in them.
-ESR_START = pd.Timestamp("2025-12-01", tz="US/Central")
+ESR_START = pd.Timestamp("2025-12-05", tz="US/Central")
 
 for day in pd.date_range(start, end, freq="D"):
     tag = day.strftime("%Y-%m-%d")
