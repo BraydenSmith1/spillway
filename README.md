@@ -99,10 +99,10 @@ spillway/
 - [x] Download pipeline (resumable, auto-restarting)
 - [x] `settlement_point_prices` — complete
 - [x] `sced_60day` — 95% complete (1,021 days, 7 GB)
-- [ ] Remaining 6 datasets downloading
+- [x] All datasets downloaded (~9.2 GB, ~470M rows)
 - [ ] Ingest Parquet into TimescaleDB
-- [ ] Crosswalk: settlement point → physical asset
-- [ ] Analysis
+- [x] Crosswalk: settlement point → physical asset (`crosswalk/`, 91% node / 42% owner coverage)
+- [x] First analysis: curtailment valued at own-node price (`analysis/FINDINGS.md`)
 - [ ] Findings written up
 
 ## Findings

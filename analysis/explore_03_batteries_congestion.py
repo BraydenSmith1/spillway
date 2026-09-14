@@ -1,4 +1,5 @@
 import duckdb
+duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 D = "/Users/braydensmith/spillway/data/raw"
 RT = f"'{D}/settlement_point_prices/settlement_point_prices_202[56]-*.parquet'"
 ESR = f"'{D}/sced_esr/*.parquet'"

@@ -23,6 +23,7 @@ Caveats, deliberately conservative:
 
 from pathlib import Path
 import duckdb
+duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent

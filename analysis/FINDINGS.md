@@ -1,354 +1,320 @@
-# ERCOT Data — Exploratory Findings
+# ERCOT Data — Findings
 
-*2026-09-12 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
+*Revised 2026-09-14 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
 
 Everything below was computed with DuckDB over the project's Parquet files.
-Each finding lists the source dataset and the logic used, so any number can be
-re-derived or challenged. **These are exploratory results, not validated
-conclusions** — caveats are stated inline rather than buried at the end.
+Each finding names its source and logic, so any number can be re-derived or
+challenged. **Exploratory results, not validated conclusions** — caveats are
+inline.
+
+**What changed since the 09-12 version.** Two things. (1) The crosswalk now
+exists, so curtailment can be joined to each unit's *own* node price, to the
+constraints that were binding, and to county and owner. (2) A timezone error
+was found and fixed: DuckDB was evaluating SCED timestamps in Mountain time,
+one hour off ERCOT's Central clock. Monthly totals were unaffected;
+hour-of-day tables were mislabeled by an hour, and the SCED-to-price joins
+were misaligned by one interval, which *understated* the price relationship.
+Corrected figures below; the old ones are noted where they moved.
 
 ---
 
-## 0. How curtailment is measured (read this first)
-
-Every curtailment number here is:
+## 0. How curtailment is measured
 
 ```
 curtailment = HSL − Base Point          (when HSL > Base Point + 1 MW)
 ```
 
-- `HSL` — what the unit **could** produce that interval
-- `Base Point` — what ERCOT **instructed** it to produce
-- 5-minute rows, so MW ÷ 12 = MWh
-- 1 MW tolerance so telemetry jitter isn't counted
-- Filtered to `Telemetered Resource Status = 'ON'` and `HSL > 0`
+`HSL` = what the unit could produce; `Base Point` = what ERCOT instructed;
+5-minute rows so MW ÷ 12 = MWh; unit status `ON`; `HSL > 0`.
 
-**This formula only means "curtailment" for intermittent resources.** For a gas
-plant, `HSL − Base Point` just means "not running flat out," which is normal
-economic dispatch. Applying it to dispatchable fuels produces nonsense — see §1.
+**Only meaningful for intermittent resources.** For gas, coal or storage,
+`HSL − Base Point` is just "not at maximum" — normal dispatch, not curtailment.
 
-*Source: `data/raw/sced_60day/*.parquet`. Traceable row-by-row via
-`analysis/show_your_work.py`.*
+*Source: `sced_60day`. Row-level audit trail: `analysis/show_your_work.py`.*
 
 ---
 
-## 1. ERCOT-wide curtailment by fuel
+## 1. ERCOT-wide curtailment
 
-| Fuel | Units | Potential (TWh) | "Curtailed" (TWh) | % |
+| Fuel | Units | Potential (TWh) | Curtailed (TWh) | % |
 |---|---|---|---|---|
 | WIND | 392 | 90.47 | 4.94 | **5.5%** |
 | PVGR (solar) | 298 | 55.08 | 3.98 | **7.2%** |
-| CCGT90 (gas) | 199 | 110.69 | 14.06 | 12.7% ⚠️ |
-| CLLIG (coal) | 22 | 49.43 | 11.44 | 23.2% ⚠️ |
-| PWRSTR (storage) | 236 | 8.71 | 8.20 | 94.1% ⚠️ |
 
-⚠️ **The gas, coal and storage rows are not curtailment.** A coal plant at 77%
-of max is doing exactly what the market asked. A battery's `HSL` is its maximum
-discharge, and it spends most of its time not discharging — hence the absurd
-94%. **Only the WIND and PVGR rows are meaningful.**
+**System-wide is 5–7%. The worst farms are 26–37%.** Both are true; quote the
+right one. The brief's 12% (§4.1) is *above* the system average and *below*
+the tail Spillway targets.
 
-> **Correction to something I said earlier:** I previously told you there were
-> no batteries in `sced_60day`. That was wrong. Storage appears as resource
-> type `PWRSTR` — **but only through Dec 2025**. From Jan 2026 the count drops
-> to exactly zero, because RTC+B moved storage into its own ESR disclosure.
-> You therefore have continuous battery coverage across the redesign: `PWRSTR`
-> in `sced_60day` before, `sced_esr` after.
+Concentration — of 298 solar units, the top 10 carry **22.7%** of all solar
+curtailment and the top 50 carry **69.7%**. Fifty sites ≈ 70% of the resource.
 
-### ERCOT-wide is 5–7%. Your top farms are 26–37%.
+Seasonality — near zero in Aug–Sep, peaking Feb–Mar (solar 12–13% system-wide,
+44–56% at the worst farms), falling back through summer.
 
-This distinction matters enormously and I blurred it earlier. **System-wide
-renewable curtailment is 5.5% (wind) and 7.2% (solar)** — *below* the 12% in
-§4.1 of the brief. The 30% figure I quoted was the average of the five
-**worst-affected** farms.
-
-Both are true. Spillway targets the worst nodes, so the tail is the relevant
-number — but **"ERCOT curtails 30%" is not a defensible claim** and would be
-challenged immediately by anyone who knows the market. The defensible version:
-
-> *"System-wide solar curtailment is ~7%, but it is highly concentrated: the
-> ten worst-affected solar farms lose 26–37% of their potential output."*
-
-### Concentration — the genuinely good news
-
-Of 298 solar units:
-- Top **10** units = **22.7%** of all solar curtailment
-- Top **50** units = **69.7%** of all solar curtailment
-
-**A portfolio of ~50 sites captures 70% of the entire ERCOT solar curtailment
-opportunity.** That is a strong argument for the §4.9 portfolio model and a
-direct answer to "how many contracts before this is a real business."
+By hour (corrected to Central; daylight only for solar): solar curtailment
+climbs from ~1% at 07:00 to a plateau of **7–8% from 11:00–16:00**; wind peaks
+at **10.6% at 15:00**. Nighttime solar percentages in the raw table are
+artifacts of tiny denominators and should be ignored (see §9).
 
 ---
 
-## 2. ⭐ Curtailment happens almost entirely at negative prices
+## 2. ⭐ Curtailed energy valued at the generator's own node
 
-Joining hourly solar curtailment to the HB_WEST hub price, Jan–Jun 2026:
+This is the central result. Jan–Jun 2026, every wind/solar unit the crosswalk
+could place at a price node (91% of them), each curtailed 5-minute interval
+joined to the price **at that unit's own settlement point**:
 
-| Hub price | Hours | Curtailed MWh | Share of all curtailment |
+| | Curtailed MWh | at price < $0 | at price < $15 | Avg $/MWh at node | Value at node | Value if negatives floored at $0 |
+|---|---|---|---|---|---|---|
+| **Solar** | 3,183,146 | **96.5%** | 99.4% | **−$8.60** | **−$27.4 M** | $1.10 M |
+| **Wind** | 3,488,654 | **95.7%** | 99.4% | **−$11.50** | **−$40.1 M** | $0.84 M |
+
+Read the last two columns carefully. Three terawatt-hours of solar were
+spilled in six months. Valued at what the market was paying at that place and
+moment, producing it would have *cost* the owners $27 million. Even counting
+every negative-price interval as worth $0 — the most generous framing for a
+PTC-less owner — the foregone revenue was **$1.1 million, or about $0.35 per
+MWh.**
+
+**The spilled energy is worth nothing to the people spilling it.** That is the
+premise of the entire business, and it holds at the unit level, not just on
+average. Every one of the ten most-curtailed solar units shows 94–100% of its
+curtailment at a negative own-node price:
+
+| Unit | Curtailed MWh | % at negative price | Avg $/MWh |
 |---|---|---|---|
-| **below $0** | 821 | 2,674,478 | **78.1%** |
-| $0–15 | 825 | 598,023 | 17.5% |
-| $15–40 | 1,788 | 124,306 | 3.6% |
-| over $40 | 699 | 26,225 | 0.8% |
+| GALLOWAY_SOLAR1 | 105,899 | 97% | −$7 |
+| SPTX12B_UNIT1 | 87,664 | 96% | −$3 |
+| REDBARN_UNIT_1 | 86,346 | 98% | −$4 |
+| RIGGINS_UNIT1 | 79,712 | 95% | −$3 |
+| WAYMARK_UNIT1 | 77,426 | 94% | −$3 |
+| JADE_SLR_UNIT2 | 66,412 | 100% | −$11 |
+| PROSPERO_UNIT1/2 | ~65,000 each | 99% | −$4 |
 
-**95.6% of solar curtailment occurs when power is worth under $15/MWh, and 78%
-when the price is outright negative.**
+*(The 09-12 version reported 78% using the West hub as a proxy, with the
+timezone misalignment. Own-node, correctly aligned: 96%.)*
 
-This is the single most important result here, and it cuts both ways:
+**What it does not settle:** at a negative price you cannot tell from this
+data whether ERCOT ordered the unit off or the unit chose to stop. For the
+economics it barely matters — the energy is worthless either way — but for the
+contract language ("verified curtailment hours", §4.2) it does. §3 is the
+partial answer.
 
-**For the thesis.** The energy really is worthless at the moment it is spilled.
-A generator facing a negative price is *paying* to produce. An offer of
-$12/MWh (§4.2) isn't competing against $0 — it's competing against a loss.
-That is a far stronger pitch than the brief assumes.
-
-**Against the thesis.** At negative prices you cannot tell from this data
-whether ERCOT *ordered* the farm off or the farm *chose* to stop. §1
-distinguishes congestion from oversupply; this join does not. Resolving it
-needs the shadow-price attribution in §6 below. Until then, "verified
-curtailment hours" (§4.2) is not yet a defined quantity.
-
-*Source: `sced_60day` joined to `settlement_point_prices` on the hour.*
-*Caveat: uses HB_WEST as a single reference price. Node-level prices require
-the crosswalk, which does not exist yet.*
+*Source: `analysis/curtailment_vs_node_price.py`.*
 
 ---
 
-## 3. Prices
+## 3. Congestion or oversupply — and which line?
 
-Across 35.9 million real-time intervals (all settlement points, Aug 25 – Jul 26):
+Shadow prices identify every transmission constraint binding at each SCED run.
+Joined to curtailment on the exact timestamp:
 
-| Metric | Value |
-|---|---|
-| Mean | **$32.00** |
-| Median | **$24.84** |
-| Minimum | **−$251.00** |
-| Maximum | **$13,036.40** |
-| Negative | **6.85%** of intervals |
-| Over $100 | 3.02% |
-| Over $1,000 | 0.031% |
+**99.2% of solar and 99.7% of wind curtailment occurred while at least one
+constraint was binding somewhere in ERCOT.** That sounds decisive and is not:
+with hundreds of constraints, one is nearly always binding. "Any constraint" is
+not discriminating.
 
-Mean well above median is the signature of a market where rare spikes carry a
-large share of total value. The top 0.03% of intervals clear above $1,000.
+What *is* informative is which constraint's binding intervals coincide with a
+given unit's curtailment far more than chance ("lift"):
 
-### Negative prices by month
+| Unit | Most-implicated constraint | Lift | Share of unit's curtailment |
+|---|---|---|---|
+| REDBARN_UNIT_1 | 656T656_1 | 5.7× | 3% |
+| SPTX12B_UNIT1 | **225T558_1** | 5.0× | 4% |
+| SRWE1_SRWE2, SRWE1_UNIT1, MWEC_G1 | **225T558_1** | 3.3–4.0× | 2% |
+| SHANNONW_UNIT_1, MIAM1_G1/G2 | HCKSW_MR2L | 3.8–4.5× | 11–12% |
+| PENA_UNIT1 | FORMOS_JOSLIN1_1 | 4.0× | 3% |
+| HRFDWIND_JRDWIND1/2 | PNHNDL | 2.8× | **19%** |
 
-| Month | % negative | Avg price |
+Two readings. First, **constraint `225T558_1` is implicated at four of the top
+twelve sites** — a shared corridor, which is exactly the "structural
+congestion" §2.2 of the TODO says a long-term contract can be underwritten
+against. Second, the share column is small: no single line explains most of
+any unit's curtailment. The honest interpretation is that these sites sit
+behind *several* recurring constraints at once, with system-wide oversupply
+underneath. Apportioning between them properly needs shift factors, which
+ERCOT does not publish here.
+
+*Source: `analysis/congestion_attribution.py`.*
+
+---
+
+## 4. Where, and whose
+
+Via the crosswalk, for the 42% of wind/solar units it can place (which hold
+**45% of all curtailed MWh** and 22 of the 50 most-curtailed units):
+
+**By county, Aug 2025 – Jul 2026**
+
+| County | Units | Curtailed GWh | % of potential |
+|---|---|---|---|
+| Borden | 11 | 421.9 | 15.3% |
+| Pecos | 8 | 309.1 | 21.3% |
+| Roberts | 2 | 241.2 | **31.9%** |
+| Concho | 12 | 231.1 | 10.4% |
+| Andrews | 5 | 223.9 | 18.3% |
+| Childress | 4 | 175.6 | 20.0% |
+| Clay | 1 | 165.2 | **34.0%** |
+| Dickens | 1 | 121.0 | 32.3% |
+
+Pecos County — the brief's §4.1 archetype — is real: eight placed units,
+309 GWh spilled, 21%.
+
+**By owner**
+
+| Owner | Units | Curtailed GWh | % of potential |
+|---|---|---|---|
+| Invenergy Services LLC | 12 | **546.1** | 19.8% |
+| Starwood Energy Group Global | 2 | 250.5 | 28.6% |
+| 225DD 8me LLC *(Galloway)* | 2 | 183.8 | 29.1% |
+| West Texas Solar Project II LLC | 4 | 170.4 | 21.5% |
+| Childress Solar Park LLC | 2 | 168.3 | **40.5%** |
+| Prospero Energy Project (Longroad) | 4 | 165.9 | 15.9% |
+| 1370 Shannon LLC | 1 | 165.2 | 34.0% |
+| RWE Clean Energy | 23 | 97.0 | 1.9% |
+
+The last row is the §6.3 screening filter in numbers: RWE has more units than
+anyone but loses under 2% — well-sited, and a large portfolio owner unlikely to
+sign a site-level deal. Childress Solar Park loses 40% of everything it could
+make, at two units, held by a single-asset LLC. **That is the shape of a first
+call.**
+
+**Galloway, fully resolved:** node `GALO_RN1`, Concho County, owned by
+225DD 8me LLC, 250 MW nameplate, operating since 2021, **118.6 GWh curtailed
+over twelve months (28%)**, 97% of it at a negative price.
+
+*Source: `analysis/curtailment_by_county_owner.py`, `crosswalk/crosswalk.csv`.
+Coverage caveat: rollups cover placed units only; `REDBARN`, `SPTX12B`,
+`WAYMARK`, `RIGGINS` remain unplaced — see `crosswalk/README.md`.*
+
+---
+
+## 5. Prices
+
+35.9 million real-time intervals, all settlement points:
+
+| Mean | Median | Min | Max | Negative | > $100 | > $1,000 |
+|---|---|---|---|---|---|---|
+| $32.00 | $24.84 | −$251 | $13,036 | **6.85%** | 3.02% | 0.031% |
+
+Negative prices by month track curtailment exactly: 0.76% in Aug 2025,
+**15.0% in Feb 2026** (average price $20.10), back to 2% by July.
+
+**Day-ahead vs real-time**, all seven hubs: DAM cleared **$2–3/MWh above RT**
+consistently, with an average absolute gap of **$11–13**. Direction is small,
+magnitude large. HB_PAN (Panhandle) is the cheapest hub at $22.61 RT.
+
+---
+
+## 6. Batteries
+
+Fleet of 313→335 units (Dec 2025–Jul 2026), charging **720–860 GWh/month**,
+implied round-trip efficiency **80–85%** — a sanity check that the data and
+arithmetic are sound.
+
+Behaviour, March 2026, corrected to Central:
+
+| Hour | Charging MWh | Discharging MWh |
 |---|---|---|
-| 2025-08 | 0.76% | $36.96 |
-| 2025-10 | 4.26% | $33.66 |
-| 2025-12 | 5.84% | $34.96 |
-| **2026-02** | **15.00%** | **$20.10** |
-| 2026-03 | 13.98% | $23.32 |
-| 2026-06 | 5.11% | $29.73 |
+| 07 | 3,289 | **72,202** |
+| 09 | **65,642** | 8,948 |
+| 12–15 | ~53,000 | ~5,500 |
+| **19** | 2,703 | **137,884** |
+| 20 | 3,005 | 108,798 |
 
-February 2026: **one interval in seven cleared below zero.** The seasonal shape
-matches curtailment almost exactly — both peak in Feb–Mar and collapse in
-August, when Texas summer demand absorbs everything available.
+Charge through the solar glut, discharge into the 7–8 pm peak. **Batteries
+are already absorbing ~700 GWh/month of exactly the midday energy Spillway
+targets.** §15's cannibalization risk is present tense.
 
-**Implication for load sizing (§4.3):** an annual average badly misrepresents
-the resource. A load sized on the yearly figure sits idle through August and is
-undersized through March. The interruptibility ladder in §3.1 matters more than
-the brief implies.
+*(09-12 version had these an hour early.)*
 
 ---
 
-## 4. Day-ahead vs real-time
-
-| Hub | Avg DAM | Avg RT | RT − DAM | Avg absolute gap |
-|---|---|---|---|---|
-| HB_NORTH | $33.90 | $31.35 | −$2.55 | $12.27 |
-| HB_WEST | $32.69 | $29.86 | −$2.83 | $13.36 |
-| HB_HOUSTON | $34.48 | $31.70 | −$2.78 | $11.05 |
-| HB_PAN | $25.94 | $22.61 | −$3.32 | $13.38 |
-| HB_SOUTH | $34.52 | $32.45 | −$2.07 | $11.66 |
-
-Two observations:
-
-1. **Day-ahead cleared systematically above real-time — by $2–3/MWh at every
-   hub.** Selling forward beat selling into real-time over this window. That is
-   a hedging result, and it is consistent across all seven hubs, which makes it
-   unlikely to be noise.
-2. **The average absolute gap is $11–13/MWh** — four to five times the average
-   bias. Direction is small; magnitude is large. That gap is the volatility
-   batteries and traders monetise.
-
-**HB_PAN (Panhandle) is the cheapest hub in ERCOT** at $22.61 real-time, ~$9
-below the others — a wind-heavy, congested corner. Worth a look as a Spillway
-target region.
-
----
-
-## 5. Batteries
-
-### Fleet
-
-| Month | Units | Charged (MWh) | Discharged (MWh) | Implied round-trip |
-|---|---|---|---|---|
-| 2026-01 | 318 | 785,660 | 667,674 | 85.0% |
-| 2026-03 | 325 | 719,281 | 600,409 | 83.5% |
-| 2026-05 | 325 | 857,944 | 704,407 | 82.1% |
-| 2026-06 | 335 | 823,415 | 654,368 | 79.5% |
-
-Round-trip efficiency of 80–85% is exactly what you'd expect from lithium-ion
-including auxiliary load — **a useful sanity check that the data and the
-arithmetic are both sound.**
-
-The fleet grew from 313 to 335 units in seven months, and the largest single
-unit has ~950–983 MWh of usable capacity.
-
-### Behaviour (March 2026, MWh by hour)
-
-| Hour | Charging | Discharging |
-|---|---|---|
-| 06 | 3,289 | **72,202** |
-| 09 | **79,668** | 3,878 |
-| 14 | 53,887 | 5,351 |
-| **18** | 2,703 | **137,884** |
-| 19 | 3,005 | 108,798 |
-
-Textbook arbitrage: charge hard through the midday solar glut, discharge into
-the evening peak, with a smaller morning discharge around 06:00.
-
-**This is the §15 cannibalization risk, quantified.** Batteries are already
-absorbing the midday surplus — the exact hours and the exact energy Spillway
-wants to buy. They are a direct competitor for the resource, not a hypothetical
-one. The counter-argument in §9.5 (contract them, or sell them the forecast)
-now has a number behind it: **~720,000 MWh/month of charging demand** already
-competing for curtailed energy.
-
-*Source: `data/raw/sced_esr/*.parquet`, Base Point sign convention — negative =
-charging, positive = discharging.*
-
----
-
-## 6. Congestion
-
-Most frequently binding transmission constraints:
+## 7. Congestion, system-wide
 
 | Constraint | Intervals binding | Avg shadow price | Max |
 |---|---|---|---|
-| NELRIO | 32,590 | $11.60 | $978.58 |
-| NE_LOB | 28,930 | $7.64 | $93.35 |
-| WESTEX | 23,259 | $6.04 | $129.85 |
-| 6437__F | 21,503 | **$131.25** | **$3,500.00** |
-| HARGRO_TWINBU1_1 | 15,069 | **$292.08** | $3,500.00 |
-| 587__A | 14,974 | $286.36 | $3,114.31 |
-| LPLMK_LPLNE_1 | 14,836 | $219.71 | $3,500.00 |
+| NELRIO | 32,590 | $11.60 | $978 |
+| 6437__F | 21,503 | **$131.25** | $3,500 |
+| HARGRO_TWINBU1_1 | 15,069 | **$292.08** | $3,500 |
 
-**Frequency and severity are different things.** NELRIO binds most often but
-costs $11.60 on average. HARGRO_TWINBU1_1 binds half as often at **25× the
-cost**. Several hit exactly $3,500 — a system cap, not a market outcome.
-
-For Spillway this is the §2.2 persistence test in raw form: a constraint
-binding 20,000+ intervals across a year is structural, and structural
-congestion is what a 5–10 year exclusive can be underwritten against.
-
-*Source: `data/raw/shadow_prices/*.parquet`. **Not yet joined to specific
-farms** — that needs the crosswalk.*
+Frequency and severity are different things; several hit the $3,500 cap.
 
 ---
 
-## 7. RTC+B before and after — suggestive, not conclusive
+## 8. RTC+B before/after — suggestive only
 
-Hub prices either side of 2025-12-05:
+| | Before (Aug–Dec 25) | After (Dec 25–Jul 26) |
+|---|---|---|
+| Mean price | $33.52 | $28.93 |
+| Volatility (σ) | 27.1 | **49.4** |
+| % negative | 2.85% | **8.83%** |
 
-| | Before RTC | After RTC | Change |
-|---|---|---|---|
-| Mean price | $33.52 | $28.93 | −14% |
-| **Volatility (σ)** | **27.12** | **49.39** | **+82%** |
-| % negative | 2.85% | 8.83% | **3.1×** |
-| % over $200 | 0.318% | 0.925% | 2.9× |
+Direction matches ERCOT's predictions, but the windows are different seasons
+and negative prices are strongly seasonal. **Not causal.** A same-season test
+needs one more year of prices (cheap to fetch).
 
-Every direction matches what ERCOT predicted: lower average cost, higher
-volatility.
-
-**⚠️ Do not quote this as causal.** "Before" is Aug–Dec 2025; "after" is
-Dec 2025–Jul 2026. The two windows are *different seasons*, and §3 above shows
-negative prices are strongly seasonal, peaking in Feb–Mar regardless. A large
-part of this gap is almost certainly spring, not market design.
-
-A defensible version needs same-season comparison — Feb–Jun 2025 vs Feb–Jun
-2026 — which requires extending the price download back another year. That is
-cheap: prices are the fastest dataset to pull.
+ERCOT's own wind forecast misses by **4–11%** (MAE), worst in March — the
+benchmark any forecast product must beat.
 
 ---
 
-## 8. ERCOT's own wind forecast accuracy
+## 9. Data-quality traps found
 
-System-wide short-term wind power forecast (`STWPF`) vs actual:
+Each produced a plausible-looking wrong answer first.
 
-| Month | MAE (MW) | Avg actual (MW) | MAE % |
-|---|---|---|---|
-| 2025-09 | 412 | 9,401 | 4.4% |
-| 2025-12 | 1,185 | 13,834 | 8.6% |
-| 2026-03 | 1,987 | 17,957 | **11.1%** |
-| 2026-05 | 894 | 13,041 | 6.9% |
-
-ERCOT's own forecast misses by **4–11%**, worst in March — the same month
-curtailment and negative prices peak. Error scales with output.
-
-**Relevance to Layer 1 (§3.1):** this is the incumbent benchmark. A forecast
-product must beat or usefully complement it. Note that ERCOT forecasts
-*production*; Spillway would forecast *curtailment*, which is a different and
-arguably harder target — but this sets the accuracy bar customers will expect.
-
----
-
-## 9. Data-quality traps found along the way
-
-Recording these because each one produced a plausible-looking wrong answer:
-
-1. **The denominator trap.** Filtering to curtailed intervals *before*
-   computing a percentage reported every farm at ~96% curtailment. The
-   tolerance has to sit inside the numerator. Caught only because the summary
-   and monthly tables disagreed.
-2. **Small denominators.** Solar shows "15.9% curtailment" at 22:00 — computed
-   over 401 MWh, versus 5.9 million MWh at midday. Meaningless. Some solar
-   units report `HSL` up to 200 MW at night (likely co-located storage or
-   telemetry error). **Filter solar to daylight hours.**
-3. **Phantom nodes.** `ERKA_SLR_RN` and `CST2_SLR_RN` appeared to average
-   exactly $0.00 for March 2026. They have **one row each** for the entire
-   month. Always check `COUNT(*)` before trusting an average.
-4. **Fuel-type misapplication.** `HSL − Base Point` on gas, coal or storage
-   produces meaningless "curtailment." Restrict to WIND and PVGR.
-5. **Resource types move.** `PWRSTR` vanishes from `sced_60day` in Jan 2026 —
-   not a gap, a relocation to the ESR file at RTC+B.
+1. **Timezone.** DuckDB defaulted to the Mac's zone (Mountain); SCED stamps are
+   Central. Hour tables shifted; joins misaligned. Fixed by pinning every
+   session to `America/Chicago`. *This is the DST/timezone trap the TODO
+   warned about, and it was in the analysis for two days before it was caught.*
+2. **Denominator.** Filtering to curtailed intervals before computing a share
+   reported 96% curtailment everywhere. The tolerance belongs in the numerator.
+3. **Small denominators.** Solar "15.9% curtailed at 23:00" — over 401 MWh vs
+   5.9 million at midday. Some units report large HSL at night (co-located
+   storage or telemetry). Restrict solar to daylight.
+4. **Phantom nodes.** Several nodes averaging exactly $0.00 for a month had
+   **one row** each. Check `COUNT(*)` before trusting an average.
+5. **"Any constraint binding"** is true 99% of the time and therefore says
+   nothing. Use lift.
+6. **Fuel-type misapplication.** `HSL − Base Point` on gas/coal/storage is not
+   curtailment. Storage also *moves*: `PWRSTR` in `sced_60day` through Dec
+   2025, then the separate ESR file after RTC+B.
+7. **EIA's node field** is a hint, not a key (`_ES_` vs `_ESS_`, literal
+   "ERCOT"). A first version of the matcher also only accepted nodes it had
+   *already* linked, silently dropping Galloway's.
 
 ---
 
 ## 10. What this means for Spillway
 
-**Strengthened:**
-- Curtailment is **highly concentrated** — 50 sites ≈ 70% of the solar
-  opportunity, making a portfolio strategy tractable.
-- Spilled energy is genuinely near-worthless: **78% of curtailment occurs at
-  negative prices**. The $12/MWh offer beats a loss, not a zero.
-- Worst-affected farms lose 26–37% of output — 2–3× the §4.1 assumption of 12%
-  and far more spill per site than the 41 GWh modelled.
+**Strengthened, now at unit level rather than in aggregate:**
+- Spilled energy is worth **nothing** to its owner — 96% of it occurs at a
+  negative own-node price, and the total foregone revenue across 3 TWh was
+  ~$1 M. A $12/MWh offer competes against a loss.
+- Curtailment is **concentrated** (50 sites ≈ 70%) and **placeable**: the
+  crosswalk now gives county and owner for sites carrying 45% of it, with a
+  ranked list of what remains.
+- Shared corridors exist (`225T558_1`), which is what a multi-year exclusive
+  is underwritten against.
 
-**Weakened or complicated:**
-- **System-wide curtailment is 5–7%, not 12%.** The brief's assumption is
-  aggressive at ERCOT level and only conservative at the tail. Be precise about
-  which you're quoting.
-- **Batteries are already taking this resource**, charging ~720 GWh/month
-  concentrated in exactly the midday hours Spillway targets. §15's
-  cannibalization risk is present tense, not future.
-- **Strong seasonality** — near-zero curtailment in August, peak in Feb–Mar.
-  The §4.3 flat-utilisation model doesn't match the resource shape.
+**Complicated:**
+- System-wide curtailment is 5–7%. Say "the worst-hit sites lose a quarter to
+  a third," not "ERCOT wastes 30%."
+- Batteries are already taking ~700 GWh/month of this resource.
+- Strong seasonality: a load sized on annual figures idles in August.
+- No single constraint explains most of a site's curtailment; proper
+  attribution needs shift factors ERCOT doesn't publish.
 
-**Still unanswerable without the crosswalk:**
-- Which physical farm sits at which price node
-- Whether a given curtailment event was ordered or economic
-- Whether congestion at a specific site is structural or episodic
-
-That last group is the binding constraint on everything now. **The crosswalk is
-no longer a nice-to-have; it is what stands between these findings and a
-site-specific pitch.**
+**Next, in order:** twenty manual lookups in `crosswalk/aliases_todo.csv`
+(moves placed coverage from ~45% to ~80% of curtailed MWh); a same-season RTC
+comparison; then a forecast baseline.
 
 ---
 
 ## Reproducing this
 
-All figures come from DuckDB queries over `data/raw/`. The curtailment
-methodology is in `analysis/curtailment_by_farm.py`; the row-level audit trail
-is `analysis/show_your_work.py`. Coverage and gaps: `python scripts/audit.py`.
+`analysis/explore_0*.py` regenerate §1, §5–8. `curtailment_vs_node_price.py`,
+`congestion_attribution.py`, `curtailment_by_county_owner.py` regenerate
+§2–4. `python crosswalk/build.py` rebuilds the crosswalk. `python
+scripts/audit.py` reports coverage. Every DuckDB session is pinned to
+Central time.

@@ -12,6 +12,7 @@ Change FARM and DAY below and re-run to inspect anything you like.
 
 from pathlib import Path
 import duckdb
+duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 
 ROOT = Path(__file__).resolve().parent.parent
 FARM = "GALLOWAY_SOLAR1"

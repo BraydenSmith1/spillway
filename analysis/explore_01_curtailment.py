@@ -1,4 +1,5 @@
 import duckdb
+duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 
 SCED = "'/Users/braydensmith/spillway/data/raw/sced_60day/gen_resource_202[56]-*.parquet'"
 CURT = """CASE WHEN HSL > "Base Point" + 1 THEN HSL - "Base Point" ELSE 0 END"""

@@ -2,6 +2,19 @@
 
 *Written 2026-09-12. Companion to `spillway-master-brief.md`; section refs like §4.10 point there.*
 
+> **Progress update 2026-09-14.** The crosswalk is built (`crosswalk/README.md`):
+> 91% of wind/solar units linked to their price node (validated against price
+> behaviour), 42% placed to county/owner via EIA-860. Tier 0.2 is answered at
+> the unit level — 96% of curtailed MWh occurs at a negative own-node price
+> (`analysis/FINDINGS.md` §2). Tier 2.1 attribution is done as far as public
+> data allows (§3). Tier 1.3's target list exists for placed sites (§4).
+> A timezone bug (Mountain vs Central) was found and fixed on 09-14; all
+> analysis sessions are now pinned to Central.
+>
+> **Next:** (1) fill the top 20 rows of `crosswalk/aliases_todo.csv` by hand —
+> moves placed coverage from ~45% to ~80% of curtailed MWh; (2) pull one more
+> year of prices for a same-season RTC comparison; (3) Tier 3.1 baseline.
+
 **Downloading is complete.** Every dataset in the pipeline now covers the full
 12-month analysis window (2025-09 → 2026-09). Nothing below is blocked on
 acquiring more data. Re-run `python scripts/audit.py` any time for current

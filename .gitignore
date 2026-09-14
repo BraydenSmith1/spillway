@@ -20,3 +20,7 @@ __pycache__/
 
 # Claude Code machine-local settings
 .claude/settings.local.json
+
+# Third-party reference downloads (EIA-860 etc.) — re-fetched by crosswalk/03_eia860_prep.py
+data/external/
+crosswalk/staging/
