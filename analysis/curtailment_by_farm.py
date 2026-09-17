@@ -11,27 +11,41 @@ Method, in plain terms:
   Base Point = what ERCOT told it to produce
   the gap    = energy thrown away
 
-Rows are 5-minute intervals, so MW / 12 = MWh.
+Interval length comes from the data, not a constant — ERCOT ran SCED every
+15 minutes before RTC+B and every 5 minutes after. See interval_hours.py.
 
 Caveats, deliberately conservative:
   * only intervals where the unit reports status ON (it was actually running)
   * a 1 MW tolerance, so telemetry jitter isn't counted as curtailment
   * daylight only for solar (HSL > 0) — a panel at night isn't curtailed
   * this does NOT yet separate ERCOT-ordered curtailment from a generator
-    choosing not to run at negative prices. That split is the next step.
+    choosing not to run at negative prices. See curtailment_vs_node_price.py.
 """
 
+import sys
 from pathlib import Path
+
 import duckdb
-duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 import pandas as pd
 
+duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central
+
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from analysis.interval_hours import interval_hours_sql  # noqa: E402
+
 FILES = [
     str(ROOT / "data/raw/sced_60day/gen_resource_2025-0[89]*.parquet"),
     str(ROOT / "data/raw/sced_60day/gen_resource_2025-1*.parquet"),
     str(ROOT / "data/raw/sced_60day/gen_resource_2026-*.parquet"),
 ]
+IH = interval_hours_sql(FILES)
+
+# The 1 MW tolerance belongs INSIDE the numerator, not in the WHERE clause.
+# Filtering the rows first would leave only curtailed intervals in the
+# denominator, which makes every farm look ~96% curtailed.
+CURTAILED = """CASE WHEN HSL > "Base Point" + 1
+                    THEN HSL - "Base Point" ELSE 0 END"""
 
 BASE = f"""
     FROM read_parquet({FILES})
@@ -40,22 +54,24 @@ BASE = f"""
       AND HSL > 0
 """
 
-# The 1 MW tolerance belongs INSIDE the numerator, not in the WHERE clause.
-# Filtering the rows first would leave only curtailed intervals in the
-# denominator, which makes every farm look ~96% curtailed.
-CURTAILED = """CASE WHEN HSL > "Base Point" + 1
-                    THEN HSL - "Base Point" ELSE 0 END"""
-
 TOP_FARMS = f"""
-SELECT
-    "Resource Name"                                AS farm,
-    ROUND(SUM({CURTAILED}) / 12.0)                 AS wasted_mwh,
-    ROUND(SUM(HSL) / 12.0)                         AS potential_mwh,
-    ROUND(100.0 * SUM({CURTAILED})
-          / NULLIF(SUM(HSL), 0), 1)                AS pct_wasted
+WITH {IH},
+daily AS (
+    SELECT "Resource Name"      AS farm,
+           "SCED Timestamp"::DATE AS day,
+           SUM({CURTAILED})     AS curt_mw,
+           SUM(HSL)             AS hsl_mw
     {BASE}
+    GROUP BY 1, 2
+)
+SELECT farm,
+       ROUND(SUM(curt_mw * hrs))                              AS wasted_mwh,
+       ROUND(SUM(hsl_mw * hrs))                               AS potential_mwh,
+       ROUND(100.0 * SUM(curt_mw * hrs) / NULLIF(SUM(hsl_mw * hrs), 0), 1)
+                                                              AS pct_wasted
+FROM daily JOIN interval_hours USING (day)
 GROUP BY 1
-HAVING SUM(HSL) / 12.0 > 50000          -- real farms only, not tiny units
+HAVING SUM(hsl_mw * hrs) > 50000       -- real farms only, not tiny units
 ORDER BY wasted_mwh DESC
 LIMIT 5
 """
@@ -64,15 +80,21 @@ LIMIT 5
 def monthly(farms):
     quoted = ", ".join(f"'{f}'" for f in farms)
     return f"""
-    SELECT
-        "Resource Name"                                     AS farm,
-        strftime("SCED Timestamp", '%Y-%m')                 AS month,
-        ROUND(100.0 * SUM({CURTAILED})
-              / NULLIF(SUM(HSL), 0), 1)                     AS pct_wasted
+    WITH {IH},
+    daily AS (
+        SELECT "Resource Name"        AS farm,
+               "SCED Timestamp"::DATE AS day,
+               SUM({CURTAILED})       AS curt_mw,
+               SUM(HSL)               AS hsl_mw
         {BASE}
           AND "Resource Name" IN ({quoted})
-    GROUP BY 1, 2
-    ORDER BY 1, 2
+        GROUP BY 1, 2
+    )
+    SELECT farm, strftime(day, '%Y-%m') AS month,
+           ROUND(100.0 * SUM(curt_mw * hrs) / NULLIF(SUM(hsl_mw * hrs), 0), 1)
+               AS pct_wasted
+    FROM daily JOIN interval_hours USING (day)
+    GROUP BY 1, 2 ORDER BY 1, 2
     """
 
 
@@ -81,8 +103,7 @@ def main():
 
     print("\n" + "=" * 72)
     print("  TOP 5 SOLAR FARMS BY CURTAILMENT  (Aug 2025 - Jul 2026)")
-    print("=" * 72)
-    print()
+    print("=" * 72 + "\n")
     out = top.copy()
     out["wasted_mwh"] = out["wasted_mwh"].map("{:,.0f}".format)
     out["potential_mwh"] = out["potential_mwh"].map("{:,.0f}".format)
@@ -95,8 +116,7 @@ def main():
 
     print("\n" + "=" * 72)
     print("  PERCENT OF POTENTIAL OUTPUT THROWN AWAY, BY MONTH")
-    print("=" * 72)
-    print()
+    print("=" * 72 + "\n")
     print(pivot.to_string(na_rep="  -"))
 
     total_wasted = top["wasted_mwh"].sum()

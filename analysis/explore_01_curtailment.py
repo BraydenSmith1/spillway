@@ -2,19 +2,32 @@ import duckdb
 duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 
 SCED = "'/Users/braydensmith/spillway/data/raw/sced_60day/gen_resource_202[56]-*.parquet'"
+# ERCOT ran SCED every 15 min before RTC+B and every 5 min after, so hours per
+# row must come from the data. Assuming 5 min understates pre-RTC energy 3x.
+IH = f"""interval_hours AS (
+  SELECT "SCED Timestamp"::DATE AS day, 24.0 / COUNT(DISTINCT "SCED Timestamp") AS hrs
+  FROM read_parquet({SCED}) GROUP BY 1
+)"""
 CURT = """CASE WHEN HSL > "Base Point" + 1 THEN HSL - "Base Point" ELSE 0 END"""
 WIN = """"SCED Timestamp" >= '2025-08-01' AND "SCED Timestamp" < '2026-07-11'"""
 
-print("### A. ERCOT-wide curtailment by fuel, Aug2025-Jul2026")
+print("### A. ERCOT-wide curtailment by fuel, Aug2025-Jul2026 (duration-aware)")
 print(duckdb.sql(f"""
-SELECT "Resource Type" AS fuel,
-       COUNT(DISTINCT "Resource Name")        AS units,
-       ROUND(SUM(HSL)/12.0/1e6, 2)            AS potential_twh,
-       ROUND(SUM({CURT})/12.0/1e6, 3)         AS curtailed_twh,
-       ROUND(100.0*SUM({CURT})/NULLIF(SUM(HSL),0), 2) AS pct
-FROM read_parquet({SCED})
-WHERE {WIN} AND "Telemetered Resource Status"='ON' AND HSL>0
-GROUP BY 1 HAVING SUM(HSL)>0 ORDER BY curtailed_twh DESC LIMIT 10
+WITH {IH},
+daily AS (
+  SELECT "Resource Type" AS fuel, "SCED Timestamp"::DATE AS day,
+         COUNT(DISTINCT "Resource Name") AS units,
+         SUM(HSL) AS hsl_mw, SUM({CURT}) AS curt_mw
+  FROM read_parquet({SCED})
+  WHERE {WIN} AND "Telemetered Resource Status"='ON' AND HSL>0
+  GROUP BY 1,2
+)
+SELECT fuel, MAX(units) AS units,
+       ROUND(SUM(hsl_mw*hrs)/1e6, 2)  AS potential_twh,
+       ROUND(SUM(curt_mw*hrs)/1e6, 3) AS curtailed_twh,
+       ROUND(100.0*SUM(curt_mw*hrs)/NULLIF(SUM(hsl_mw*hrs),0), 2) AS pct
+FROM daily JOIN interval_hours USING (day)
+GROUP BY 1 ORDER BY curtailed_twh DESC LIMIT 10
 """))
 
 print("### B. Renewable curtailment by month")

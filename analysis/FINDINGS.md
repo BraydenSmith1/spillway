@@ -1,13 +1,23 @@
 # ERCOT Data — Findings
 
-*Revised 2026-09-14 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
+*Revised 2026-09-17 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
 
 Everything below was computed with DuckDB over the project's Parquet files.
 Each finding names its source and logic, so any number can be re-derived or
 challenged. **Exploratory results, not validated conclusions** — caveats are
 inline.
 
-**What changed since the 09-12 version.** Two things. (1) The crosswalk now
+**What changed on 09-17.** A second measurement error, larger than the first.
+ERCOT ran SCED every **15 minutes before RTC+B and every 5 minutes after**
+(96 vs ~290 runs/day). Every energy figure had assumed 5 minutes throughout,
+which understated pre-RTC MWh threefold and, because the low-curtailment
+autumn months were underweighted, *overstated* pooled percentages. Absolute
+energy and pooled-percentage figures below are corrected; interval length is
+now derived per day (`analysis/interval_hours.py`) rather than hardcoded.
+**§2, §3 and §6 were unaffected** — they cover Jan–Jun 2026 or Dec 2025
+onward, entirely post-RTC, where MW/12 was correct.
+
+**What changed on 09-14.** Two things. (1) The crosswalk now
 exists, so curtailment can be joined to each unit's *own* node price, to the
 constraints that were binding, and to county and owner. (2) A timezone error
 was found and fixed: DuckDB was evaluating SCED timestamps in Mountain time,
@@ -25,7 +35,11 @@ curtailment = HSL − Base Point          (when HSL > Base Point + 1 MW)
 ```
 
 `HSL` = what the unit could produce; `Base Point` = what ERCOT instructed;
-5-minute rows so MW ÷ 12 = MWh; unit status `ON`; `HSL > 0`.
+unit status `ON`; `HSL > 0`.
+
+**Interval length is derived per day, never hardcoded.** ERCOT ran SCED every
+15 minutes through 2025-12-04 and every 5 minutes from 2025-12-10, so
+MW → MWh uses `24 / (SCED runs that day)`. See `analysis/interval_hours.py`.
 
 **Only meaningful for intermittent resources.** For gas, coal or storage,
 `HSL − Base Point` is just "not at maximum" — normal dispatch, not curtailment.
@@ -38,18 +52,22 @@ curtailment = HSL − Base Point          (when HSL > Base Point + 1 MW)
 
 | Fuel | Units | Potential (TWh) | Curtailed (TWh) | % |
 |---|---|---|---|---|
-| WIND | 392 | 90.47 | 4.94 | **5.5%** |
-| PVGR (solar) | 298 | 55.08 | 3.98 | **7.2%** |
+| WIND | 382 | 112.63 | 5.59 | **4.97%** |
+| PVGR (solar) | 289 | 71.94 | 4.58 | **6.37%** |
 
-**System-wide is 5–7%. The worst farms are 26–37%.** Both are true; quote the
-right one. The brief's 12% (§4.1) is *above* the system average and *below*
-the tail Spillway targets.
+*(Duration-aware. The 09-14 version read 5.5% and 7.2% on 4.94/3.98 TWh,
+inflated by the SCED cadence error.)*
 
-Concentration — of 298 solar units, the top 10 carry **22.7%** of all solar
-curtailment and the top 50 carry **69.7%**. Fifty sites ≈ 70% of the resource.
+**System-wide is 5–6%. The worst farms are 22–31%.** Both are true; quote the
+right one. The brief's 12% (§4.1) is roughly **double** the system average and
+well below the tail Spillway targets.
 
-Seasonality — near zero in Aug–Sep, peaking Feb–Mar (solar 12–13% system-wide,
-44–56% at the worst farms), falling back through summer.
+Concentration — of 298 solar units, the top 10 carry **22.8%** of all solar
+curtailment and the top 50 carry **69.5%**. Fifty sites ≈ 70% of the resource.
+
+Seasonality — near zero in Aug–Sep, peaking Feb–Mar (44–56% at the worst
+farms), falling back through summer. The five most-curtailed solar units threw
+away **566,957 MWh** over twelve months, a weighted **25.4%** of potential.
 
 By hour (corrected to Central; daylight only for solar): solar curtailment
 climbs from ~1% at 07:00 to a plateau of **7–8% from 11:00–16:00**; wind peaks
@@ -142,46 +160,48 @@ ERCOT does not publish here.
 ## 4. Where, and whose
 
 Via the crosswalk, for the 42% of wind/solar units it can place (which hold
-**45% of all curtailed MWh** and 22 of the 50 most-curtailed units):
+**45% of all curtailed MWh** and 25 of the 50 most-curtailed units):
 
 **By county, Aug 2025 – Jul 2026**
 
 | County | Units | Curtailed GWh | % of potential |
 |---|---|---|---|
-| Borden | 11 | 421.9 | 15.3% |
-| Pecos | 8 | 309.1 | 21.3% |
-| Roberts | 2 | 241.2 | **31.9%** |
-| Concho | 12 | 231.1 | 10.4% |
-| Andrews | 5 | 223.9 | 18.3% |
-| Childress | 4 | 175.6 | 20.0% |
-| Clay | 1 | 165.2 | **34.0%** |
-| Dickens | 1 | 121.0 | 32.3% |
+| Borden | 11 | 473.0 | 13.5% |
+| Nolan | 15 | 351.7 | 12.4% |
+| Pecos | 8 | 339.1 | 17.7% |
+| Roberts | 2 | 267.7 | **28.0%** |
+| Scurry | 19 | 253.2 | 4.9% |
+| Concho | 12 | 250.8 | 8.9% |
+| Andrews | 5 | 234.2 | 14.6% |
+| Childress | 4 | 210.5 | **19.2%** |
+| Clay | 1 | 185.8 | **31.2%** |
 
 Pecos County — the brief's §4.1 archetype — is real: eight placed units,
-309 GWh spilled, 21%.
+339 GWh spilled, 17.7%.
 
 **By owner**
 
 | Owner | Units | Curtailed GWh | % of potential |
 |---|---|---|---|
-| Invenergy Services LLC | 12 | **546.1** | 19.8% |
-| Starwood Energy Group Global | 2 | 250.5 | 28.6% |
-| 225DD 8me LLC *(Galloway)* | 2 | 183.8 | 29.1% |
-| West Texas Solar Project II LLC | 4 | 170.4 | 21.5% |
-| Childress Solar Park LLC | 2 | 168.3 | **40.5%** |
-| Prospero Energy Project (Longroad) | 4 | 165.9 | 15.9% |
-| 1370 Shannon LLC | 1 | 165.2 | 34.0% |
-| RWE Clean Energy | 23 | 97.0 | 1.9% |
+| Invenergy Services LLC | 12 | **599.4** | 17.4% |
+| RWE Clean Energy | 29 | 495.3 | 6.0% |
+| Starwood Energy Group Global | 2 | 290.1 | **26.7%** |
+| Intersect USA, LLC | 6 | 256.4 | 12.4% |
+| 225DD 8me LLC *(Galloway)* | 2 | 196.8 | 23.2% |
+| Childress Solar Park LLC | 2 | 188.8 | **35.2%** |
+| 1370 Shannon LLC | 1 | 185.8 | **31.2%** |
+| Concho Bluff LLC | 2 | 144.8 | 28.1% |
+| Onward Energy | 5 | 116.5 | 5.0% |
 
-The last row is the §6.3 screening filter in numbers: RWE has more units than
-anyone but loses under 2% — well-sited, and a large portfolio owner unlikely to
-sign a site-level deal. Childress Solar Park loses 40% of everything it could
-make, at two units, held by a single-asset LLC. **That is the shape of a first
-call.**
+This is the §6.3 screening filter in numbers. RWE is second by volume but
+loses only 6% — well-sited, and a large portfolio owner unlikely to sign a
+site-level deal. Childress Solar Park loses **35%** of everything it could
+make, at two units, held by a single-asset LLC. **That is the shape of a
+first call.**
 
 **Galloway, fully resolved:** node `GALO_RN1`, Concho County, owned by
-225DD 8me LLC, 250 MW nameplate, operating since 2021, **118.6 GWh curtailed
-over twelve months (28%)**, 97% of it at a negative price.
+225DD 8me LLC, 250 MW nameplate, operating since 2021, **127.0 GWh curtailed
+over twelve months (22%)**, 97% of it at a negative price.
 
 *Source: `analysis/curtailment_by_county_owner.py`, `crosswalk/crosswalk.csv`.
 Coverage caveat: rollups cover placed units only; `REDBARN`, `SPTX12B`,
@@ -279,7 +299,14 @@ Each produced a plausible-looking wrong answer first.
 6. **Fuel-type misapplication.** `HSL − Base Point` on gas/coal/storage is not
    curtailment. Storage also *moves*: `PWRSTR` in `sced_60day` through Dec
    2025, then the separate ESR file after RTC+B.
-7. **EIA's node field** is a hint, not a key (`_ES_` vs `_ESS_`, literal
+7. **SCED cadence changed at RTC+B** — 15-minute intervals before
+   2025-12-05, 5-minute after. Hardcoding `MW / 12` understated pre-RTC energy
+   threefold and skewed every pooled percentage across the boundary. Derive
+   interval length from the data (`analysis/interval_hours.py`). *Caught on
+   09-17, three days after the numbers were first published. The tell was
+   an unrelated check: HASL and LASL turned out to be NULL after December,
+   which led to counting SCED runs per day.*
+8. **EIA's node field** is a hint, not a key (`_ES_` vs `_ESS_`, literal
    "ERCOT"). A first version of the matcher also only accepted nodes it had
    *already* linked, silently dropping Galloway's.
 
@@ -298,8 +325,9 @@ Each produced a plausible-looking wrong answer first.
   is underwritten against.
 
 **Complicated:**
-- System-wide curtailment is 5–7%. Say "the worst-hit sites lose a quarter to
-  a third," not "ERCOT wastes 30%."
+- System-wide curtailment is 5–6%. Say "the worst-hit sites lose a fifth to a
+  third," not "ERCOT wastes 30%." The brief's 12% assumption is about double
+  the system-wide reality.
 - Batteries are already taking ~700 GWh/month of this resource.
 - Strong seasonality: a load sized on annual figures idles in August.
 - No single constraint explains most of a site's curtailment; proper
