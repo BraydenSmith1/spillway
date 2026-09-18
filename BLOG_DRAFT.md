@@ -84,10 +84,12 @@ physically impossible. On real prices the relaxation over-claimed at 29 of the 3
 the worst one — yet only 0.2% fleet-wide. Small today; it scales with every
 gigawatt of solar that pushes prices below zero more often. I kept the binaries.
 
-Two other sensitivities: a $10/MWh degradation charge <<DEG_DELTA>>, and a
-1.5-cycle-per-day cap <<CYC_DELTA>>. The perfect-foresight strategy loves
-shallow micro-cycles on small price ripples; a real operator with a warranty
-does not.
+One more thing I checked, because it's the obvious objection: maybe real
+operators capture less because they're protecting the asset. Unconstrained
+perfect foresight cycles a battery twice a day; real units averaged 0.7. But
+cap the optimiser at a warranty-style 1.5 cycles and it keeps 96.5% of the
+ceiling; charge it $10/MWh for wear and it keeps 94%. The extra cycling was
+shallow micro-arbitrage that barely paid. **Caution doesn't explain the gap.**
 
 ## What I got wrong along the way
 

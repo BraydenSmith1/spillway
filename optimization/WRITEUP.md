@@ -169,8 +169,8 @@ own real-time node · each day opens at the unit's real SOC.*
 |---|---|---|
 | Base (MILP) | 54.5 | — |
 | LP relaxation | 54.6 | +0.2% — but see below |
-| $10/MWh degradation cost | | |
-| 1.5 cycles/day cap | | |
+| $10/MWh degradation cost | 51.3 | −5.9% |
+| 1.5 cycles/day cap | 52.6 | −3.5% |
 
 ### Reading the results
 
@@ -229,7 +229,17 @@ reason to accept it. But its size scales with how deep and how often prices
 go negative, and both are rising with every gigawatt of solar. A model built
 on the shortcut will drift wrong quietly.
 
-**7. Ancillary services are no longer the story.** They added 11% to real
+**7. The ceiling survives realistic wear limits — so caution doesn't explain
+the gap.** Unconstrained perfect foresight cycles a battery **2.0 times a day**
+(90th percentile 2.7); the real units averaged **0.7** (90th percentile 1.2).
+That looks like the optimiser buying revenue with degradation an operator
+would never accept. But cap it at a warranty-style 1.5 cycles/day and it
+still earns 96.5% of the ceiling; charge it $10/MWh of throughput and it
+keeps 94%. The extra cycling is shallow micro-arbitrage on small ripples
+(visible in the example-day chart) that adds little. **The 39% capture rate
+is an operating outcome, not the price of protecting the asset.**
+
+**8. Ancillary services are no longer the story.** They added 11% to real
 units' revenue. Real-time reserve prices averaged under $1/MW-h in this
 window — consistent with the widely reported saturation of ERCOT's AS market
 by storage. The "batteries live on reserves" era is not visible in this data.

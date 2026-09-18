@@ -19,6 +19,9 @@ Units: 30   Days: 2025-12-05 → 2026-07-08   Unit-days: 5,970
 | Variant | Perfect foresight $/kW-yr | vs base |
 |---|---|---|
 | Base (MILP) | 54.5 | +0.0% |
+| LP relaxation | 54.6 | +0.2% |
+| $10/MWh degradation | 51.3 | -5.9% |
+| 1.5 cycles/day cap | 52.6 | -3.5% |
 
 ## Per-unit capture rate (actual incl. AS ÷ perfect foresight)
 
