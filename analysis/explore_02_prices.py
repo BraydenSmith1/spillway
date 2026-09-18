@@ -1,5 +1,5 @@
 import duckdb
-D = "/Users/braydensmith/spillway/data/raw"
+D = "data/raw"
 RT = f"'{D}/settlement_point_prices/settlement_point_prices_202[56]-*.parquet'"
 DAM = f"'{D}/dam_settlement_point_prices/*.parquet'"
 

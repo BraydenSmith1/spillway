@@ -1,7 +1,7 @@
 import duckdb
 duckdb.sql("SET TimeZone = 'America/Chicago'")  # ERCOT runs on Central; the Mac does not
 
-SCED = "'/Users/braydensmith/spillway/data/raw/sced_60day/gen_resource_202[56]-*.parquet'"
+SCED = "'data/raw/sced_60day/gen_resource_202[56]-*.parquet'"
 # ERCOT ran SCED every 15 min before RTC+B and every 5 min after, so hours per
 # row must come from the data. Assuming 5 min understates pre-RTC energy 3x.
 IH = f"""interval_hours AS (
