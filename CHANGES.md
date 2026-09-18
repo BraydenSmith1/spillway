@@ -65,6 +65,25 @@ batteries capture ~28% of possible revenue; with them the picture is fairer.
 - `DATA_DICTIONARY.md` — all 228 columns explained.
 - `crosswalk/` — resource → node → plant/county/owner.
 
+## The result, in one table
+
+30 real batteries, 199 days, each settled at its own node:
+
+| Strategy | $/kW-yr | Capture |
+|---|---|---|
+| Fixed schedule (noon charge, dinner discharge, no prices) | $29 | 53% |
+| Day-ahead informed (what an operator can actually do) | $28 | 51% |
+| **What the batteries actually did** (energy + reserves) | **$21** | **39%** |
+| Perfect foresight (the ceiling) | $54 | 100% |
+
+Three things to be able to say out loud: (1) real units captured ~40% of the
+ceiling and the best captured 70%, so 40% is an operating outcome, not
+physics; (2) the dumb fixed schedule *beat* day-ahead optimisation because
+ERCOT's evening peak is that regular and day-ahead prices are that unreliable
+a guide to real-time; (3) four units lost $60–121k each in single days by
+charging into the winter's two biggest spikes. Full narrative in
+`optimization/WRITEUP.md` §"Reading the results".
+
 ## What you need to do
 
 1. **Read `optimization/WRITEUP.md` end to end.** It's the blog post. Make

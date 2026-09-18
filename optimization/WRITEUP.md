@@ -143,14 +143,25 @@ day, so it skips the first day of each run.
 
 ### Headline — 30 units, Dec 2025 – Jul 2026
 
+<p align="center"><img src="results/fig_strategies.png" width="680"></p>
+
 | Strategy | $/kW-yr (median unit) | $/kW-yr (fleet) | Capture vs perfect |
 |---|---|---|---|
-| Fixed schedule | | | |
-| Persistence | | | |
-| Day-ahead informed | | | |
-| Actual (energy only) | | | |
-| Actual (with AS) | | | |
-| Perfect foresight | | | 100% |
+| Fixed schedule | 30.7 | 29.1 | 53% |
+| Persistence | 11.5 | 11.7 | 21% |
+| Day-ahead informed | 28.1 | 27.9 | 51% |
+| Actual (energy only) | 18.6 | 19.0 | 35% |
+| **Actual (energy + AS)** | **20.9** | **21.3** | **39%** |
+| Perfect foresight | 53.3 | 54.5 | 100% |
+
+*30 units · 199 days · 5,970 unit-days · every strategy settled at the unit's
+own real-time node · each day opens at the unit's real SOC.*
+
+- **Value of perfect foresight over day-ahead dispatch: $26.5/kW-yr** — 49% of
+  the ceiling.
+- **Ancillary services were 11% of what real units earned.** Real-time AS
+  clearing prices averaged well under $1/MW-h across the window.
+- **Capture across units: median 41%, IQR 33–46%, range 4–70%.**
 
 ### Sensitivities
 
@@ -163,7 +174,58 @@ day, so it skips the first day of each run.
 
 ### Reading the results
 
-*(written once the numbers are in)*
+**1. Real batteries captured about two-fifths of what was available.**
+$21/kW-yr against a $54 ceiling. The best unit (SHAMROCK, 100 MW / 3.3 h)
+captured 70%; two others cleared 60%. So 60–70% is achievable — the fleet
+median of 41% is an operating outcome, not a physical limit.
+
+**2. The dumb strategy beat the smart one.** Charging at noon and discharging
+at dinner, every day, with no price information at all, earned $29/kW-yr —
+*more* than optimising against the day-ahead price ($28). This held across
+the full seven months, not just one lucky one. ERCOT's evening peak is so
+reliable that a schedule tuned to the market's shape catches it; optimising
+against day-ahead prices commits to day-ahead peaks that real-time doesn't
+always honour (the average |DA − RT| gap is $11–13/MWh). The lesson is not
+that optimisation fails — perfect foresight nearly doubles both — but that
+**an optimiser fed the wrong price series can lose to a heuristic that
+encodes the right shape.**
+
+**3. Yesterday is a bad forecast.** Persistence captured 21%. Real-time
+spikes don't repeat on schedule.
+
+**4. The money is in a handful of days.** January and April each delivered
+$85–87/kW-yr annualised under perfect foresight; June and July under $35.
+Monthly capture rose from 29–30% in Dec–Jan to 44–52% by May–Jul — partly
+operators settling in after the RTC+B redesign, partly fewer spikes to miss.
+
+<p align="center"><img src="results/fig_monthly.png" width="680"></p>
+
+**5. The worst days explain the capture gap.** On 21 January and 17 February
+— the two biggest scarcity events of the winter — at least four of the thirty
+units were *charging* when prices passed $3,000/MWh:
+
+| Unit | Day | Actual | Perfect foresight |
+|---|---|---|---|
+| WZRD_ESS_ESR1 | 2026-01-21 | **−$121,165** | +$149,535 |
+| EVLN_ESS_ESR1 | 2026-01-21 | −$108,260 | +$190,449 |
+| TANZ_ESS_ESR1 | 2026-02-17 | −$94,479 | +$126,810 |
+| TANZ_ESS_ESR2 | 2026-02-17 | −$93,991 | +$127,033 |
+
+A $270,000 swing on one unit in one day. The two TANZ units share a site and
+did it on the same day, which points at a site-level schedule or SOC target
+rather than chance. WZRD is a 6.5-hour unit that used only 38% of its
+capacity across the window and sold no reserves — almost certainly still
+commissioning. **Unit-level capture rates are dominated by a few days**, and a
+strategy's real test is what it does during a spike, not on an average day.
+
+<p align="center"><img src="results/fig_example_day.png" width="720"></p>
+
+**6. Ancillary services are no longer the story.** They added 11% to real
+units' revenue. Real-time reserve prices averaged under $1/MW-h in this
+window — consistent with the widely reported saturation of ERCOT's AS market
+by storage. The "batteries live on reserves" era is not visible in this data.
+Which makes the energy-arbitrage question — and the forecast quality it
+depends on — the whole game.
 
 ---
 

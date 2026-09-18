@@ -1,112 +1,109 @@
 # Spillway
 
-**Open, reproducible analysis of nodal electricity prices in ERCOT (the Texas grid).**
+**How much money are Texas batteries leaving on the table?** An ERCOT data
+pipeline, a nodal curtailment analysis, and a Pyomo battery-arbitrage
+optimiser benchmarked against what 30 real batteries actually did.
 
-> ⚠️ **TODO — the most important line in this README.** Replace this with the one
-> specific question this project answers, and the headline number you found. E.g.
-> *"Battery storage at West Texas resource nodes would have earned 40% more than
-> at the North Hub in 2026 — here's the node-by-node breakdown."*
+<p align="center"><img src="optimization/results/fig_strategies.png" width="720"></p>
 
----
+## The headline
 
-## Why this exists
+Over 199 days (Dec 2025 – Jul 2026), settled at each unit's own price node:
 
-ERCOT publishes an enormous amount of market data for free, but it arrives as raw,
-paginated API responses with cryptic location codes and no context. Most usable
-nodal analysis lives behind commercial platforms that cost thousands of dollars per
-seat. This project builds an open, reproducible pipeline from ERCOT's public API to
-a queryable database, and uses it to answer a specific question about the Texas market.
-
-## The data
-
-All data comes from the [ERCOT Public API](https://apiexplorer.ercot.com/) and covers
-**the entire ERCOT interconnection** — roughly 90% of Texas load, operating as a single
-grid largely isolated from the rest of the US.
-
-| Dataset | What it is | Granularity |
+| Strategy | $/kW-year | Capture vs. perfect foresight |
 |---|---|---|
-| `settlement_point_prices` | Real-time price at every pricing location | 15 min × ~1,115 points |
-| `lmp_resource_nodes` | Locational marginal price at generator nodes | 5 min (SCED) |
-| `shadow_prices` | Cost of each binding transmission constraint | 5 min (SCED) |
-| `sced_60day` | Per-generator dispatch: output, limits, fuel type | 5 min, 60-day lag |
-| `solar_production` | Solar output, actual vs. forecast, by region | hourly |
-| `wind_production` | Wind output, actual vs. forecast, by region | hourly |
-| `resource_outages` | Generation capacity offline | hourly |
-| `7d_load_forecast_*` | Demand forecasts by zone / weather zone | hourly, 7-day horizon |
+| Fixed schedule (charge at noon, discharge at dinner) | $29 | 53% |
+| Day-ahead informed — *what a real operator can do* | $28 | 51% |
+| **Actual — what the batteries did (energy + reserves)** | **$21** | **39%** |
+| Perfect foresight — *the ceiling* | $54 | 100% |
 
-**Scale:** ~7 GB of Parquet and growing. Prices in a single month range from
-**-$251/MWh to $10,152/MWh**, and **5.1% of all price intervals are negative** —
-the grid periodically paying generators to stop.
+A perfect real-time forecast is worth **$27/kW-year** over dispatching on
+day-ahead prices — that gap is what a forecasting product sells. Full write-up,
+formulation, and caveats: **[`optimization/WRITEUP.md`](optimization/WRITEUP.md)**.
 
-**Coverage:** last 12 months (rolling). Older history can be pulled by widening
-`FULL_START` in `scripts/download_all.py`.
+## Why this isn't the usual battery tutorial
 
-### Known data quality issues
+Everyone optimises a battery against a price series. Three things here are
+different:
 
-- `sced_60day` is missing **54 of 1,075 expected days (~5%)**, mostly scattered gaps
-  in Dec 2025 and Mar 2026. <!-- TODO: document how you handle these -->
-- The 60-day SCED disclosure is published with a deliberate 60-day lag, so the most
-  recent two months of generator-level data are never available.
-- ERCOT did not publish some datasets before late 2023.
+1. **There's an answer key.** ERCOT's 60-day SCED disclosure reports every
+   storage unit's dispatch and state of charge at 5-minute resolution. The
+   optimiser is scored against real behaviour, not against itself.
+2. **It runs at each unit's own node**, via a resource→settlement-point
+   crosswalk validated against price behaviour — not a hub proxy.
+3. **The LP shortcut is wrong in ERCOT.** Dropping the charge/discharge mode
+   binaries ("efficiency makes simultaneous operation wasteful") holds only
+   when prices are non-negative. ERCOT prices go negative 7% of the time,
+   and the LP relaxation then "burns" stored energy to absorb more paid
+   charging. The benchmark uses the MILP; `tests/test_model.py` demonstrates
+   both behaviours.
 
-## Setup
+## What else came out of the data
+
+From 9.2 GB / 470 M rows of ERCOT public API data, analysed in
+[`analysis/FINDINGS.md`](analysis/FINDINGS.md):
+
+- **Renewable curtailment is 5–6% system-wide and 22–31% at the worst
+  sites.** The 50 most-curtailed solar units account for 70% of all solar
+  curtailment.
+- **96% of curtailed energy is spilled at a negative own-node price.**
+  Valued at the node, 3.2 TWh of curtailed solar over six months was worth
+  −$27 M to its owners.
+- **Batteries charge ~700 GWh/month straight through the midday surplus**,
+  with an implied fleet round-trip efficiency of 82%.
+- **`gridstatus` 0.36.0 silently drops every SCED day after 2026-06-25**
+  (`Unknown curve type found`), and ERCOT's timestamp-typed range parameters
+  drop the last day of every month. Both worked around in `scripts/`.
+
+## What's in the repo
+
+```
+scripts/          ERCOT API client, resumable downloaders, coverage audit
+crosswalk/        resource → price node → plant / county / owner (EIA-860)
+analysis/         curtailment, prices, congestion, batteries; FINDINGS.md
+optimization/     Pyomo MILP, five strategies, benchmark, report; WRITEUP.md
+tests/            18 tests, all on synthetic data — no download needed
+DATA_DICTIONARY.md  every column of every dataset, acronyms explained
+```
+
+## Reproduce it
 
 ```bash
-# 1. Clone and create a virtual environment
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env                 # add your free ERCOT API credentials
 
-# 2. Add your ERCOT credentials
-cp .env.example .env    # then edit .env with your real values
+python scripts/download_all.py       # ~1 day for the full window; resumable
+./scripts/run_sced.sh                # 60-day disclosures (generators + storage)
+python optimization/fetch_as_prices.py
+python crosswalk/build.py            # ~3 min
+python scripts/audit.py              # what's on disk, where the gaps are
 
-# 3. Start the database
-docker compose up -d
-
-# 4. Create the tables
-psql -h localhost -p 5433 -U spillway -d spillway -f sql/01_schema.sql
-
-# 5. Download the data (long-running; auto-restarts if interrupted)
-./scripts/run_download.sh &
-tail -f logs/download_all.out    # watch progress
+python -m optimization.benchmark --units 30     # ~10 min
+python -m optimization.report                    # tables + figures
+pytest                                           # 18 tests, ~3 s
 ```
 
-## Project structure
+Everything downstream of the API is deterministic; the numbers in the
+write-up regenerate from `optimization/results/`.
 
-```
-spillway/
-├── scripts/            # pipeline code
-│   ├── ercot.py            # API client: auth + pagination
-│   ├── download.py         # pulls one dataset, month by month
-│   ├── download_all.py     # runs all 8 datasets in sequence
-│   ├── run_download.sh     # keeps the download alive (caffeinate + auto-restart)
-│   ├── db.py               # database connection
-│   └── status.py           # what's downloaded, what's missing
-├── sql/01_schema.sql   # TimescaleDB table definitions
-├── ingest/             # TODO: Parquet -> database
-├── crosswalk/          # TODO: node codes -> real power plants
-├── notebooks/          # exploration (numbered: 01_, 02_, ...)
-├── analysis/           # TODO: the actual analysis
-├── reports/figures/    # charts used in this README
-└── data/               # NOT in git — regenerate with scripts/download_all.py
-    ├── raw/                # immutable API output
-    ├── clean/              # processed
-    └── warehouse/
-```
+## Things to know before trusting a number
 
-## Status
+Documented in full in [`analysis/FINDINGS.md` §9](analysis/FINDINGS.md) and
+encoded as regression tests:
 
-- [x] ERCOT API client with auth, pagination, retry/backoff
-- [x] Download pipeline (resumable, auto-restarting)
-- [x] `settlement_point_prices` — complete
-- [x] `sced_60day` — 95% complete (1,021 days, 7 GB)
-- [x] All datasets downloaded (~9.2 GB, ~470M rows)
-- [ ] Ingest Parquet into TimescaleDB
-- [x] Crosswalk: settlement point → physical asset (`crosswalk/`, 91% node / 42% owner coverage)
-- [x] First analysis: curtailment valued at own-node price (`analysis/FINDINGS.md`)
-- [ ] Findings written up
+- SCED ran every **15 minutes before RTC+B (2025-12-05) and every 5 after**.
+  Interval length is derived from the data, never hardcoded.
+- SCED timestamps are **Central**; every DuckDB session is pinned to it.
+- `HSL − Base Point` is curtailment **only for wind and solar**.
+- ~14 SCED days are permanently unpublished by ERCOT; load forecasts only
+  exist from 2026-03; the ESR storage disclosure begins at RTC+B go-live.
 
-## Findings
+## Roadmap
 
-<!-- TODO: 3-5 charts and what they show. This section is what people actually read. -->
+[`ROADMAP.md`](ROADMAP.md). The next real step is energy + ancillary-service
+co-optimisation — the model ERCOT itself runs post-RTC+B.
 
+## License
 
+MIT.
