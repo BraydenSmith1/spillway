@@ -24,3 +24,6 @@ __pycache__/
 # Third-party reference downloads (EIA-860 etc.) — re-fetched by crosswalk/03_eia860_prep.py
 data/external/
 crosswalk/staging/
+
+# Business plan — never publish
+spillway-master-brief.md
