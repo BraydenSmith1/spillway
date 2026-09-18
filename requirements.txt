@@ -19,3 +19,8 @@ psycopg2-binary>=2.9       # NOT YET INSTALLED — scripts/db.py needs this
 matplotlib==3.11.1
 duckdb==1.5.5              # query Parquet directly with SQL, no server needed
 jupyter>=1.0               # NOT YET INSTALLED — for notebooks/
+
+# --- Optimisation ---
+pyomo==6.10.1               # battery arbitrage model (optimization/)
+highspy==1.15.1             # HiGHS solver, free, fast MILP
+pytest>=8.0                # tests/

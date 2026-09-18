@@ -1,0 +1,20 @@
+[project]
+name = "spillway"
+version = "0.1.0"
+description = "ERCOT nodal curtailment and battery arbitrage benchmarking, from the public API to a Pyomo model validated against real storage dispatch."
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Brayden Smith", email = "braydenericsmith@gmail.com" }]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["optimization", "analysis", "crosswalk", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
