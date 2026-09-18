@@ -167,8 +167,8 @@ own real-time node · each day opens at the unit's real SOC.*
 
 | Variant | Perfect-foresight $/kW-yr | Change |
 |---|---|---|
-| Base (MILP) | | — |
-| LP relaxation | | the negative-price exploit, in dollars |
+| Base (MILP) | 54.5 | — |
+| LP relaxation | 54.6 | +0.2% — but see below |
 | $10/MWh degradation cost | | |
 | 1.5 cycles/day cap | | |
 
@@ -220,7 +220,16 @@ strategy's real test is what it does during a spike, not on an average day.
 
 <p align="center"><img src="results/fig_example_day.png" width="720"></p>
 
-**6. Ancillary services are no longer the story.** They added 11% to real
+**6. The LP shortcut: wrong in principle, cheap in practice — for now.** On
+real prices the relaxation over-claimed perfect-foresight revenue at **29 of
+30 units** — by $7,300 at the median unit and $50,700 at the worst over the
+window, $3,900 on the single worst day — yet only +0.2% fleet-wide. The
+mechanism is real and the binaries are cheap (60 solves/s), so there is no
+reason to accept it. But its size scales with how deep and how often prices
+go negative, and both are rising with every gigawatt of solar. A model built
+on the shortcut will drift wrong quietly.
+
+**7. Ancillary services are no longer the story.** They added 11% to real
 units' revenue. Real-time reserve prices averaged under $1/MW-h in this
 window — consistent with the widely reported saturation of ERCOT's AS market
 by storage. The "batteries live on reserves" era is not visible in this data.
@@ -256,7 +265,7 @@ Being explicit, because the gaps are where the next version lives:
 ```bash
 pip install -r requirements.txt
 python optimization/fetch_as_prices.py          # ancillary-service prices (~2 min)
-python -m optimization.benchmark --units 30     # ~10 min
+python -m optimization.benchmark --units 30     # ~15 min
 python -m optimization.benchmark --units 30 --lp --tag lp
 pytest                                          # 18 tests, no data needed
 ```

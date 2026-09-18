@@ -79,7 +79,7 @@ python optimization/fetch_as_prices.py
 python crosswalk/build.py            # ~3 min
 python scripts/audit.py              # what's on disk, where the gaps are
 
-python -m optimization.benchmark --units 30     # ~10 min
+python -m optimization.benchmark --units 30     # ~15 min
 python -m optimization.report                    # tables + figures
 pytest                                           # 18 tests, ~3 s
 ```
