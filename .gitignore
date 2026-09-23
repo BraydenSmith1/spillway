@@ -27,3 +27,6 @@ crosswalk/staging/
 
 # Business plan — never publish
 spillway-master-brief.md
+
+# DuckDB spill directory
+.duckdb_tmp/

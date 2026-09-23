@@ -1,11 +1,19 @@
 # ERCOT Data — Findings
 
-*Revised 2026-09-17 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
+*Revised 2026-09-23 · Window: Aug 2025 – Jul 2026 · All numbers from `data/raw/`*
 
 Everything below was computed with DuckDB over the project's Parquet files.
 Each finding names its source and logic, so any number can be re-derived or
 challenged. **Exploratory results, not validated conclusions** — caveats are
 inline.
+
+**What changed on 09-23.** §3 is rewritten. ERCOT's System Lambda (the
+grid-wide energy price, `np6-322-cd`) was downloaded and joined to every
+curtailed interval, so the oversupply-vs-congestion question is now answered
+exactly rather than by the shadow-price lift heuristic: 71% of solar and 84%
+of wind curtailment is congestion. The earlier claim that this split "needs
+shift factors ERCOT does not publish" was wrong and is corrected — shift
+factors are needed to name lines, not to separate congestion from glut.
 
 **What changed on 09-17.** A second measurement error, larger than the first.
 ERCOT ran SCED every **15 minutes before RTC+B and every 5 minutes after**
@@ -122,38 +130,95 @@ partial answer.
 
 ---
 
-## 3. Congestion or oversupply — and which line?
+## 3. Congestion or oversupply — exactly, per curtailed MWh
 
-Shadow prices identify every transmission constraint binding at each SCED run.
-Joined to curtailment on the exact timestamp:
+ERCOT's nodal price is **LMP = System Lambda + congestion component** — there
+is no marginal-loss term. Lambda is the energy price for the grid as a whole;
+the congestion component is what a full line adds or subtracts at this node.
+Both are public. So every curtailed 5-minute interval, joined to the unit's
+own node, classifies by one subtraction:
 
-**99.2% of solar and 99.7% of wind curtailment occurred while at least one
-constraint was binding somewhere in ERCOT.** That sounds decisive and is not:
-with hundreds of constraints, one is nearly always binding. "Any constraint" is
-not discriminating.
+| Lambda | Own-node LMP | Reading |
+|---|---|---|
+| ≤ 0 | — | **oversupply** — Texas as a whole had more power than it wanted |
+| > 0 | < 0 | **congestion** — the grid wanted power; this node was stuck behind a full line |
+| > 0 | ≥ 0 | other — curtailed at a positive price (local limits, ramping, operator choice) |
 
-What *is* informative is which constraint's binding intervals coincide with a
-given unit's curtailment far more than chance ("lift"):
+Sep 2025 – Jul 2026, 1.47 M curtailed unit-intervals at node-linked units,
+100% matched to both a 5-minute LMP and a lambda:
 
-| Unit | Most-implicated constraint | Lift | Share of unit's curtailment |
-|---|---|---|---|
-| REDBARN_UNIT_1 | 656T656_1 | 5.7× | 3% |
-| SPTX12B_UNIT1 | **225T558_1** | 5.0× | 4% |
-| SRWE1_SRWE2, SRWE1_UNIT1, MWEC_G1 | **225T558_1** | 3.3–4.0× | 2% |
-| SHANNONW_UNIT_1, MIAM1_G1/G2 | HCKSW_MR2L | 3.8–4.5× | 11–12% |
-| PENA_UNIT1 | FORMOS_JOSLIN1_1 | 4.0× | 3% |
-| HRFDWIND_JRDWIND1/2 | PNHNDL | 2.8× | **19%** |
+| | Curtailed GWh | Congestion | Oversupply | Other |
+|---|---|---|---|---|
+| **Solar** | 4,233 | **70.7%** | 26.1% | 3.2% |
+| **Wind** | 5,119 | **84.0%** | 10.8% | 5.1% |
 
-Two readings. First, **constraint `225T558_1` is implicated at four of the top
-twelve sites** — a shared corridor, which is exactly the "structural
-congestion" §2.2 of the TODO says a long-term contract can be underwritten
-against. Second, the share column is small: no single line explains most of
-any unit's curtailment. The honest interpretation is that these sites sit
-behind *several* recurring constraints at once, with system-wide oversupply
-underneath. Apportioning between them properly needs shift factors, which
-ERCOT does not publish here.
+**Curtailment in ERCOT is overwhelmingly congestion, not glut.** Seven in ten
+curtailed solar MWh and more than eight in ten wind MWh were spilled while the
+grid as a whole still wanted the power. The oversupply share lives in two
+months:
 
-*Source: `analysis/congestion_attribution.py`.*
+| Month | GWh | Oversupply | Congestion | Avg λ when curtailed |
+|---|---|---|---|---|
+| 2025-10 | 711 | 19% | 77% | $20 |
+| 2025-12 | 790 | 9% | 86% | $22 |
+| **2026-01** | 981 | **47%** | 49% | $15 |
+| **2026-02** | 1,259 | **44%** | 53% | **$4** |
+| 2026-03 | 1,621 | 12% | 85% | $15 |
+| 2026-04 | 1,380 | **0.4%** | **96%** | $28 |
+| 2026-06 | 881 | 0% | 95% | $23 |
+
+January–February 2026 — the negative-price peak in §5 — is the only period in
+which System Lambda itself collapsed (averaging $4 in February) and
+curtailment was a genuine Texas-wide surplus. By April, 96% of curtailment was
+congestion with lambda at $28: the state wanted the power and could not move
+it.
+
+**The dollar view.** Curtailed solar under congestion was worth **−$37 M** at
+its own nodes and **+$56 M** at the system price. The congestion component
+averaged **−$31/MWh** on curtailed solar and **−$36/MWh** on curtailed wind.
+That ~$93 M on solar alone is the price of being on the wrong side of a wire.
+
+**Per site.** The top sites are 70–94% congestion. A Permian cluster — CMPD,
+ASCK, MERCURY, FILESSLR — sits at 90–94% with congestion components of −$58
+to −$63/MWh: the most stranded energy in Texas. Wind is more uniformly
+congested than solar.
+
+| Site | Fuel | Curtailed GWh | Congestion | Congestion $/MWh | Owner |
+|---|---|---|---|---|---|
+| GALLOWAY_SOLAR1 | solar | 127 | 74% | −17 | 225DD 8me LLC |
+| REDBARN_UNIT_1 | solar | 115 | 77% | −18 | — |
+| SPTX12B_UNIT1 | solar | 109 | 80% | −17 | RWE Clean Energy |
+| CMPD_SLR_SOLAR2 | solar | 103 | **94%** | **−60** | — |
+| MISAE_UNIT1 | solar | 95 | 81% | −22 | Childress Solar Park LLC |
+| ASCK_SLR_SOLAR2 | solar | 87 | **94%** | **−63** | — |
+| HRFDWIND_JRDWIND2 | wind | 191 | 88% | −29 | — |
+| SHANNONW_UNIT_1 | wind | 186 | 85% | −24 | 1370 Shannon LLC |
+| MIAM1_G2 | wind | 134 | 91% | −26 | Invenergy |
+| PENA_UNIT1 | wind | 110 | 93% | −35 | — |
+
+Full per-site (top 50 solar, top 20 wind) and site × month tables:
+`analysis/lambda_split_tables.md`; per-unit values are in `registry/generation.csv`.
+
+**What this means for a contract.** The two kinds of curtailment have
+opposite trajectories. Congestion has a cure with a schedule — ERCOT's
+transmission plan, and the Permian-basin build-out in particular — so a site
+that is 94% congestion-curtailed today may be far less so once the line is
+built. Oversupply has no cure and grows with every gigawatt of solar, but it
+is contested by every battery on the system. A multi-year exclusive on a
+congestion site is a bet on the transmission schedule; on an oversupply site,
+a bet against the battery build-out.
+
+**Which line?** Shadow prices still answer that. The binding intervals of
+`225T558_1` coincide with curtailment far above chance at four of the top
+twelve solar sites, and `PNHNDL` with 19% of HRFDWIND's — those are the
+corridors. Apportioning congestion *across named lines* needs shift factors,
+which ERCOT does not publish. The split between oversupply and congestion does
+not: it needs only System Lambda, which is public. The earlier statement here
+that "apportioning between them needs shift factors" was wrong.
+
+*Source: `analysis/curtailment_lambda_split.py` (primary);
+`analysis/congestion_attribution.py` (corridor hint). Lambda from
+`np6-322-cd`, fetched by `scripts/fetch_lambda.py`.*
 
 ---
 
@@ -321,8 +386,10 @@ Each produced a plausible-looking wrong answer first.
 - Curtailment is **concentrated** (50 sites ≈ 70%) and **placeable**: the
   crosswalk now gives county and owner for sites carrying 45% of it, with a
   ranked list of what remains.
-- Shared corridors exist (`225T558_1`), which is what a multi-year exclusive
-  is underwritten against.
+- **Curtailment is congestion, not glut**: 71% of solar and 84% of wind
+  curtailed MWh occurred while the grid as a whole still wanted power. That is
+  the kind a site contract can be underwritten against — with the caveat that
+  congestion has a cure on a schedule (transmission) and oversupply does not.
 
 **Complicated:**
 - System-wide curtailment is 5–6%. Say "the worst-hit sites lose a fifth to a
@@ -330,8 +397,9 @@ Each produced a plausible-looking wrong answer first.
   the system-wide reality.
 - Batteries are already taking ~700 GWh/month of this resource.
 - Strong seasonality: a load sized on annual figures idles in August.
-- No single constraint explains most of a site's curtailment; proper
-  attribution needs shift factors ERCOT doesn't publish.
+- The oversupply/congestion split is exact (System Lambda), but naming *which
+  line* at a site still needs shift factors ERCOT doesn't publish; the
+  shadow-price lift only identifies corridors.
 
 **Next, in order:** twenty manual lookups in `crosswalk/aliases_todo.csv`
 (moves placed coverage from ~45% to ~80% of curtailed MWh); a same-season RTC
@@ -342,7 +410,8 @@ comparison; then a forecast baseline.
 ## Reproducing this
 
 `analysis/explore_0*.py` regenerate §1, §5–8. `curtailment_vs_node_price.py`,
-`congestion_attribution.py`, `curtailment_by_county_owner.py` regenerate
+`curtailment_lambda_split.py`, `congestion_attribution.py`,
+`curtailment_by_county_owner.py` regenerate
 §2–4. `python crosswalk/build.py` rebuilds the crosswalk. `python
 scripts/audit.py` reports coverage. Every DuckDB session is pinned to
 Central time.

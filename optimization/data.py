@@ -136,19 +136,62 @@ def dam_prices(node: str, start: str, end: str) -> pd.Series:
 
 @lru_cache(maxsize=None)
 def actual_dispatch(unit: str, start: str, end: str) -> pd.DataFrame:
-    """What the battery actually did: mean Base Point (MW, +discharge/-charge)
-    and end-of-interval SOC, at 15-min."""
+    """What the battery actually did, at 15-min: mean Base Point (MW,
+    +discharge/-charge), end-of-interval SOC, the share of 5-min rows with
+    status ON, and the declared Min/Max SOC window.
+
+    on_share is what separates a battery that was trading from one that was
+    commissioning (ONTEST) or out; the anatomy filters on it. The declared
+    window is what the operator told ERCOT it would use that interval, which
+    is often narrower than the physical envelope."""
     return con.sql(f"""
         SELECT date_trunc('minute', ("SCED Timestamp" AT TIME ZONE 'America/Chicago'))
                  - INTERVAL (minute("SCED Timestamp" AT TIME ZONE 'America/Chicago') % 15) MINUTE AS ts,
                AVG("Base Point") AS net_mw,
-               LAST(SOC ORDER BY "SCED Timestamp") AS soc_mwh
+               LAST(SOC ORDER BY "SCED Timestamp") AS soc_mwh,
+               AVG(CASE WHEN "Telemetered Resource Status" = 'ON' THEN 1.0 ELSE 0.0 END) AS on_share,
+               AVG("Min SOC") AS decl_min,
+               AVG("Max SOC") AS decl_max
         FROM read_parquet('{RAW}/sced_esr/esr_*.parquet')
         WHERE "Resource Name" = '{unit}'
           AND "SCED Timestamp" >= TIMESTAMPTZ '{start} 00:00:00 America/Chicago'
           AND "SCED Timestamp" <  TIMESTAMPTZ '{end} 00:00:00 America/Chicago'
         GROUP BY 1 ORDER BY 1
     """).df().set_index("ts")
+
+
+@lru_cache(maxsize=None)
+def lmp_5min(node: str, start: str, end: str) -> pd.Series:
+    """5-minute LMP at a resource node, indexed by the SCED run's minute
+    (naive Central). This is the price SCED actually cleared against, as
+    opposed to the 15-minute settlement price the unit is paid at."""
+    s = con.sql(f"""
+        SELECT date_trunc('minute', CAST(SCEDTimestamp AS TIMESTAMP)) AS ts, LMP AS lmp
+        FROM read_parquet('{RAW}/lmp_resource_nodes/lmp_resource_nodes_202[56]-*.parquet')
+        WHERE settlementPoint = '{node}' AND NOT repeatHourFlag
+          AND SCEDTimestamp >= '{start}' AND SCEDTimestamp < '{end}'
+        ORDER BY ts
+    """).df().set_index("ts").lmp
+    return s[~s.index.duplicated()]
+
+
+def esr_curves(unit: str, start: str, end: str) -> pd.DataFrame:
+    """Per SCED run: Base Point, the unit's SCED1 energy offer curve
+    ([[MW, $/MWh], ...] from charging-side negative MW to discharging-side
+    positive MW), whether ERCOT proxy-extended the curve, and status."""
+    df = con.sql(f"""
+        SELECT date_trunc('minute', ("SCED Timestamp" AT TIME ZONE 'America/Chicago')) AS ts,
+               "Base Point" AS bp,
+               "SCED1 Offer Curve" AS curve,
+               "Proxy Extension" AS proxy,
+               "Telemetered Resource Status" AS status
+        FROM read_parquet('{RAW}/sced_esr/esr_*.parquet')
+        WHERE "Resource Name" = '{unit}'
+          AND "SCED Timestamp" >= TIMESTAMPTZ '{start} 00:00:00 America/Chicago'
+          AND "SCED Timestamp" <  TIMESTAMPTZ '{end} 00:00:00 America/Chicago'
+        ORDER BY 1
+    """).df()
+    return df[~df.ts.duplicated()].set_index("ts")
 
 
 def as_awards(unit: str, start: str, end: str) -> pd.DataFrame:

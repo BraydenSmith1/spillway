@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from optimization.model import Battery, Dispatch, build, set_prices, solve
+from optimization.model import Battery, Dispatch, build, set_params, solve
 
 
 def revenue(net_mw: np.ndarray, rt_price: np.ndarray, dt: float) -> float:
@@ -75,12 +75,14 @@ class Optimiser:
     def __init__(self, battery: Battery, dt: float, milp: bool = True):
         self.battery, self.dt, self.milp, self._models = battery, dt, milp, {}
 
-    def run(self, prices: np.ndarray, soc0: float) -> Dispatch:
+    def run(self, prices: np.ndarray, soc0: float, smin: float | None = None,
+            smax: float | None = None, awards: dict | None = None) -> Dispatch:
+        """Solve one day. smin/smax narrow the SOC window; awards impose the
+        unit's reserve position. Both reset to defaults when omitted."""
         n = len(prices)
         if n not in self._models:
             self._models[n] = build(self.battery, prices, self.dt, soc0, mode_binaries=self.milp)
-        else:
-            set_prices(self._models[n], prices, soc0)
+        set_params(self._models[n], prices=prices, soc0=soc0, smin=smin, smax=smax, awards=awards)
         return solve(self._models[n])
 
 
