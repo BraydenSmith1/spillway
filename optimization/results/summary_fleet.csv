@@ -1,0 +1,10 @@
+strategy,$/kW-yr (median unit),$/kW-yr (fleet-weighted),capture vs perfect (%)
+fixed_schedule,24.7,24.4,50.1
+persistence,8.6,8.9,18.3
+dam_informed,21.4,23.2,47.7
+actual,14.8,16.5,34.0
+actual_as_only,2.3,2.4,4.9
+actual_total,17.2,18.9,38.9
+pf_window_awards,30.6,34.2,70.4
+pf_window,44.6,45.6,93.8
+perfect_foresight,46.6,48.7,100.0

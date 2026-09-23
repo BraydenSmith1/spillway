@@ -12,9 +12,16 @@ What's done, what's next, and roughly why. For the analysis so far see
   price behaviour) → plant, county, owner via EIA-860 (42%).
 - **Curtailment measured.** System-wide 5–6%; the worst sites 22–31%; 96% of
   it at a negative own-node price. Concentrated: 50 sites ≈ 70%.
-- **Battery optimiser.** Pyomo MILP, benchmarked against 30 real units' own
+- **Battery optimiser.** Pyomo MILP, benchmarked against real units' own
   dispatch, with day-ahead-informed and perfect-foresight bounds and AS
   revenue accounted for.
+- **Capture-gap anatomy.** The ceiling-to-actual gap decomposed into
+  commissioning, declared SOC window, reserves held (net of AS), and dispatch
+  residual, per unit, with price-setting intervals flagged
+  (`optimization/anatomy.py`).
+- **Oversupply vs congestion, exactly.** System Lambda joined to every
+  curtailed interval: 71% of solar and 84% of wind curtailment is congestion.
+- **Registry.** `registry/storage.csv` and `registry/generation.csv`.
 - **Tests + CI.** 18 tests on synthetic data, including one for each
   data-quality trap that produced a wrong answer along the way.
 
@@ -32,15 +39,18 @@ What's done, what's next, and roughly why. For the analysis so far see
 3. **A curtailment forecast, honestly scored.** LightGBM quantile regression
    for P10/P50/P90 curtailment 24–48h ahead at a node, split in time,
    scored per node against persistence and seasonal-naive baselines.
-4. **Twenty manual crosswalk lookups.** `crosswalk/aliases_todo.csv` ranks
-   the unplaced sites by curtailment; resolving the top 20 lifts placed
-   coverage from ~45% to ~80% of curtailed MWh.
+4. **Twenty manual crosswalk lookups, twice.** `crosswalk/aliases_todo.csv`
+   ranks unplaced generation sites by curtailment and unplaced storage sites
+   by capacity, interleaved. The top 20 of each lift placed coverage from ~45%
+   to ~80% of curtailed MWh and from ~33% to well over half of storage MWh.
 5. **Same-season RTC+B comparison.** Pull one more year of prices (cheap) so
    Feb–Jun 2025 can be compared with Feb–Jun 2026 without confounding the
    market redesign with the seasons.
-6. **Constraint geography.** Shadow-price `fromStation`/`toStation` map to
-   physical lines; joining them to plant coordinates would turn "which
-   constraint" into "which line, on a map".
+6. **Constraint geography.** The oversupply-vs-congestion split is now exact
+   (System Lambda, `analysis/curtailment_lambda_split.py`). What remains is
+   naming the line: shadow-price `fromStation`/`toStation` map to physical
+   lines, and joining them to plant coordinates would turn "which corridor"
+   into "which line, on a map".
 
 ## Not planned
 

@@ -100,3 +100,29 @@ def test_repo_has_no_hardcoded_home_paths():
     offenders = [p for p in root.rglob("*.py")
                  if ".venv" not in p.parts and p != Path(__file__) and needle in p.read_text()]
     assert offenders == []
+
+
+def test_lambda_classification_signs():
+    """§3: LMP = System Lambda + congestion. lambda <= 0 is system-wide
+    oversupply regardless of the node; lambda > 0 with a negative own-node
+    LMP is congestion; a positive LMP under positive lambda is 'other'.
+    Mirrors the CASE in analysis/curtailment_lambda_split.py."""
+    con = duckdb.connect()
+    rows = con.sql("""
+        SELECT lmp, lam,
+               CASE WHEN lam <= 0 THEN 'oversupply'
+                    WHEN lmp < 0  THEN 'congestion'
+                    ELSE 'other' END AS cause,
+               lmp - lam AS congestion_component
+        FROM (VALUES (-30.0, -5.0), (-30.0, 20.0), (10.0, 20.0), (-0.01, 0.0), (5.0, 0.0))
+             t(lmp, lam)
+        ORDER BY lmp, lam
+    """).df()
+    got = dict(zip(zip(rows.lmp, rows.lam), rows.cause))
+    assert got[(-30.0, -5.0)] == "oversupply"        # grid itself negative
+    assert got[(-30.0, 20.0)] == "congestion"        # grid wanted power, node did not
+    assert got[(10.0, 20.0)] == "other"              # curtailed at a positive price
+    assert got[(-0.01, 0.0)] == "oversupply"         # lambda exactly 0 counts as oversupply
+    assert got[(5.0, 0.0)] == "oversupply"
+    comp = rows.set_index(["lmp", "lam"]).congestion_component
+    assert comp[(-30.0, 20.0)] == pytest.approx(-50.0)   # the price of the wire

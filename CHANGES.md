@@ -1,7 +1,53 @@
 # What changed, in plain terms
 
-*2026-09-17. Written for the project owner, not for GitHub visitors — delete
-or fold into the README before publishing if you like.*
+*Written for the project owner, not for GitHub visitors — delete or fold into
+the README before publishing if you like. Newest first.*
+
+## 2026-09-23 — the anatomy, the lambda split, the registry
+
+**The headline numbers moved, and the old "worst days" story was wrong.**
+Both were predicted by the review panel and are now fixed.
+
+- **Status filter.** The benchmark never excluded commissioning units
+  (`ONTEST`). Filtering to fully-ON unit-days moves fleet capture from 38.9%
+  to **42.5%** (the 30 largest units: 39% → **45%**). The README now leads
+  with the filtered number.
+- **Finding #5.** Jan 21 / Feb 17 were not scarcity events — the hub was at
+  $23–60. They were nodal spikes on violated 138 kV constraints, and the
+  Jan 21 units were 86–100% ONTEST. The real worst fully-ON days are Winter
+  Storm Fern week (JAG_SLR Jan 25, EBNY Jan 26, ANOL Feb 1) and BLACKSPR on
+  May 18. Rewritten in `WRITEUP.md`.
+- **The waterfall** (`optimization/results/anatomy.md`, 129 units): ceiling
+  $48.7/kW-yr → commissioning −5.7 → declared window −2.3 → reserves net of
+  AS −8.6 → dispatch −13.2 → actual $18.9. The surprise is reserves: holding
+  the unit's awards cost 26 points of energy revenue on ON days and earned
+  back 5 at real-time prices; not one of 129 units had reserves pay for
+  themselves. Treat that as an upper bound (read the caveats in the file).
+  The dispatch residual is the biggest piece and is *not* concentrated on the
+  big days.
+- **A quarter of the ceiling isn't credible.** On 24.5% of perfect-foresight
+  dollars the unit's own offer set the LMP; a price-taking ceiling overstates
+  what was available there. Flagged per unit, not subtracted.
+- **Congestion, not glut.** System Lambda (`np6-322-cd`) joined to every
+  curtailed interval: 71% of solar and 84% of wind curtailment is congestion.
+  FINDINGS §3 rewritten; the "needs shift factors" sentence was wrong.
+- **Registry.** `registry/storage.csv` (338 units, 129 benchmarked) and
+  `registry/generation.csv` (716 units) with a README.
+- **Aliases.** `crosswalk/aliases_todo.csv` now interleaves unplaced storage
+  sites (by capacity) with generation sites (by curtailment). The DME codes
+  in it (YHABIT, YEXELO, YMADER…) are strong hints for the manual lookups.
+- **Model.** SOC window and reserve awards are mutable parameters; reserve
+  headroom is measured from net output as ERCOT does; an infeasible day is
+  flagged rather than fatal. 27 tests.
+
+**What to do next, in order:** (1) read `optimization/results/anatomy.md`
+top to bottom and be able to say the reserves caveat out loud; (2) download
+the DAM ESR disclosure and re-price AS at DAM MCPC — it's the one number in
+the waterfall with a known bias; (3) the reactive (no-forecast, re-plan every
+interval) baseline, so the "value of a forecast" is stated against what an
+operator can actually do; (4) twenty alias lookups of each kind.
+
+## 2026-09-17 — optimisation, benchmark, cleanup
 
 ## The big one: `optimization/` is new
 

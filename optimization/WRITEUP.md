@@ -138,10 +138,17 @@ day, so it skips the first day of each run.
 
 ## Results
 
-<!-- RESULTS: filled from optimization/results/summary_full.csv once the
-     full run completes. Keep the table shape below. -->
+> **Read this first (2026-09-23).** The tables in this section are the
+> original 30-unit run and include commissioning (`ONTEST`) unit-days; the
+> sensitivities below were run on that set and are kept consistent with it.
+> Two things changed after it was written. (1) Filtering to fully-ON
+> unit-days, as any published benchmark does, moves the 30-unit capture rate
+> from 39% to **45%**. The fleet-wide, status-filtered headline — 129 units,
+> 42.5% — and the decomposition of the remaining gap are in
+> **[`results/anatomy.md`](results/anatomy.md)**, which is what the README
+> now leads with. (2) Finding #5 was wrong and is rewritten below.
 
-### Headline — 30 units, Dec 2025 – Jul 2026
+### Headline — 30 units, Dec 2025 – Jul 2026 (all unit-days)
 
 <p align="center"><img src="results/fig_strategies.png" width="680"></p>
 
@@ -200,23 +207,35 @@ operators settling in after the RTC+B redesign, partly fewer spikes to miss.
 
 <p align="center"><img src="results/fig_monthly.png" width="680"></p>
 
-**5. The worst days explain the capture gap.** On 21 January and 17 February
-— the two biggest scarcity events of the winter — at least four of the thirty
-units were *charging* when prices passed $3,000/MWh:
+**5. The "worst days" were mostly not what they looked like.** The first
+version of this write-up led with 21 January and 17 February as "the two
+biggest scarcity events of the winter", during which four units charged into
+$3,000 prices. That was wrong in two ways, both caught by checking the
+telemetry status column and the shadow prices. The hub averaged $23–60 on
+those days: the spikes were nodal, on two violated 138 kV constraints
+(`138_NAL_HAS_1` on Jan 21, `BLASCOFE_RC_1` on Feb 17, both at the $3,500
+cap). And the two Jan 21 units were commissioning — EVLN 100% `ONTEST`, WZRD
+86% — running test schedules, not trading. The TANZ pair on Feb 17 was mostly
+ON (82%) and did charge ~400 MWh each into the spike; that is a real event,
+but a local-constraint one, and whether their own charging loaded the line
+cannot be established from public data.
+
+The true worst days for units that were fully operational are different, and
+cluster on **Winter Storm Fern, 24–27 January**:
 
 | Unit | Day | Actual | Perfect foresight |
 |---|---|---|---|
-| WZRD_ESS_ESR1 | 2026-01-21 | **−$121,165** | +$149,535 |
-| EVLN_ESS_ESR1 | 2026-01-21 | −$108,260 | +$190,449 |
-| TANZ_ESS_ESR1 | 2026-02-17 | −$94,479 | +$126,810 |
-| TANZ_ESS_ESR2 | 2026-02-17 | −$93,991 | +$127,033 |
+| JAG_SLR_ESR1 | 2026-01-25 | **−$60,417** | +$98,990 |
+| ANOL_ESS_ESR1 | 2026-02-01 | −$59,161 | +$59,324 |
+| BLACKSPR_ESR1 | 2026-05-18 | −$56,470 | +$150,674 |
+| EBNY_ESS_ESR1 | 2026-01-26 | −$55,619 | +$161,110 |
 
-A $270,000 swing on one unit in one day. The two TANZ units share a site and
-did it on the same day, which points at a site-level schedule or SOC target
-rather than chance. WZRD is a 6.5-hour unit that used only 38% of its
-capacity across the window and sold no reserves — almost certainly still
-commissioning. **Unit-level capture rates are dominated by a few days**, and a
-strategy's real test is what it does during a spike, not on an average day.
+And the sequel to "the money is in a handful of days" is that the *shortfall*
+is not: across the fleet, the 20 biggest perfect-foresight days carry 40% of
+the ceiling and 40% of the dispatch residual, and capture on those days (44%)
+was slightly *higher* than on the other 179 (42%). Dollar concentration is
+real; operating failure on spike days is not the story. See
+`results/anatomy.md` §5.
 
 <p align="center"><img src="results/fig_example_day.png" width="720"></p>
 
@@ -246,6 +265,23 @@ by storage. The "batteries live on reserves" era is not visible in this data.
 Which makes the energy-arbitrage question — and the forecast quality it
 depends on — the whole game.
 
+**9. Where the gap actually went.** Decomposing the ceiling-to-actual gap
+for all 129 active units (`results/anatomy.md`): **12%** of the ceiling sat
+on unit-days the unit was not fully ON; **5%** is the SOC window operators
+declared; **18%** is reserves held, net of the AS revenue they earned at
+real-time prices — holding the unit's awards cost 26 points of ON-day energy
+revenue and earned back 5, and not one unit's reserves paid for themselves at
+real-time MCPC; and **27%** is dispatch. On a further quarter of the ceiling
+the unit's own offer set the LMP, so a price-taking ceiling is not credible
+there at all. The reserves figure is an upper bound — real-time awards are
+co-optimised outputs rather than prior obligations, and day-ahead awards at
+DAM MCPC would earn more — and the dispatch residual is spread evenly across
+ordinary days rather than concentrated on the big ones. Finding 8 stands as a
+statement about what units *earned*; the anatomy says reserves are a large
+share of what they *gave up*, at least at real-time prices.
+
+<p align="center"><img src="results/fig_waterfall.png" width="680"></p>
+
 ---
 
 ## What this does not capture
@@ -255,7 +291,9 @@ Being explicit, because the gaps are where the next version lives:
 1. **AS revenue is counted for the real unit but not optimised for.** The
    optimiser only trades energy. A co-optimising model that chooses between
    energy and reserves each interval is the obvious next step, and post-RTC
-   it is the model ERCOT itself runs.
+   it is the model ERCOT itself runs. AS revenue is also priced at real-time
+   MCPC only; day-ahead awards are paid at DAM MCPC, typically 2–4× higher,
+   which needs the DAM ESR disclosure.
 2. **Perfect foresight is a yardstick, not a strategy.** Nobody has it. The
    realistic ceiling is somewhere between day-ahead-informed and perfect, and
    the distance between them is exactly what a forecasting product is worth.
@@ -277,7 +315,10 @@ pip install -r requirements.txt
 python optimization/fetch_as_prices.py          # ancillary-service prices (~2 min)
 python -m optimization.benchmark --units 30     # ~15 min
 python -m optimization.benchmark --units 30 --lp --tag lp
-pytest                                          # 18 tests, no data needed
+python -m optimization.benchmark --all --tag fleet    # every unit, ~4.5 h
+python -m optimization.price_setting --tag fleet      # offer-curve flags, ~4 min
+python -m optimization.anatomy --tag fleet            # the waterfall
+pytest                                          # 27 tests, no data needed
 ```
 
 Results land in `optimization/results/`. Every number in this write-up comes
