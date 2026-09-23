@@ -258,12 +258,25 @@ keeps 94%. The extra cycling is shallow micro-arbitrage on small ripples
 (visible in the example-day chart) that adds little. **The 39% capture rate
 is an operating outcome, not the price of protecting the asset.**
 
-**8. Ancillary services are no longer the story.** They added 11% to real
-units' revenue. Real-time reserve prices averaged under $1/MW-h in this
-window — consistent with the widely reported saturation of ERCOT's AS market
-by storage. The "batteries live on reserves" era is not visible in this data.
-Which makes the energy-arbitrage question — and the forecast quality it
-depends on — the whole game.
+**8. Reserves added 11% to measured revenue — but that is a floor, not the
+AS story.** Real-time reserve clearing prices averaged under $1/MW-h across
+this window, which is consistent with the widely reported saturation of
+ERCOT's AS market by storage. It would be wrong to conclude from this number
+that reserves no longer matter, because **this benchmark only prices
+real-time awards.** ERCOT procures most of its ancillary services day-ahead,
+and DAM MCPC typically clears several times higher; those awards need the
+60-day DAM ESR disclosure (`/np3-966-er/60d_dam_esr_data`), which this project
+has not yet pulled. Real units also sell energy day-ahead, whereas every
+strategy here — actual included — is settled entirely at real-time prices.
+
+So read the headline as **energy-arbitrage capture, with a partial reserve
+credit**, not as total revenue capture. The direction of the bias is known:
+counting the day-ahead stack would raise "actual" and narrow the gap. What
+the comparison does support is the narrower claim it was built for — that
+against a *price-taking, energy-only ceiling at each unit's own node*, real
+dispatch captured about two-fifths, and that the shortfall is an operating
+outcome rather than the price of protecting the asset (finding 7), with the
+pieces named in finding 9.
 
 **9. Where the gap actually went.** Decomposing the ceiling-to-actual gap
 for all 129 active units (`results/anatomy.md`): **12%** of the ceiling sat
