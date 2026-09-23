@@ -5,8 +5,8 @@ ERCOT's nodal price is  LMP = System Lambda + congestion component  — there is
 no marginal-loss term. System Lambda is the energy price for the grid as a
 whole; the congestion component is what this node adds or subtracts because
 of full lines between it and everyone else. Both are public. So for every
-curtailed 5-minute interval at a unit's own node, one subtraction settles the
-question the brief's §1 asks:
+curtailed 5-minute interval at a unit's own node, one subtraction settles
+which of the two causes was operating:
 
     lambda <= 0              system-wide OVERSUPPLY: Texas as a whole had more
                              power than it wanted; the node was not special

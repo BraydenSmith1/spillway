@@ -11,16 +11,11 @@ requests==2.34.2
 python-dotenv==1.2.2       # loads credentials from .env
 gridstatus==0.36.0         # used by download_sced.py for 60-day disclosures
 
-# --- Database (TimescaleDB / Postgres) ---
-SQLAlchemy==2.0.51
-psycopg2-binary>=2.9       # NOT YET INSTALLED — scripts/db.py needs this
-
-# --- Analysis & exploration ---
+# --- Analysis ---
 matplotlib==3.11.1
 duckdb==1.5.5              # query Parquet directly with SQL, no server needed
-jupyter>=1.0               # NOT YET INSTALLED — for notebooks/
 
 # --- Optimisation ---
-pyomo==6.10.1               # battery arbitrage model (optimization/)
-highspy==1.15.1             # HiGHS solver, free, fast MILP
+pyomo==6.10.1              # battery arbitrage model (optimization/)
+highspy==1.15.1            # HiGHS solver, free, fast MILP
 pytest>=8.0                # tests/

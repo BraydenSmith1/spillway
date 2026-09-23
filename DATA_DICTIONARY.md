@@ -226,9 +226,9 @@ it won't tell you a specific plant is down.
 `southCentral`, `southern`, `west`.
 
 Because `postedDatetime` and `deliveryDate` are both present, you can measure
-**forecast error as a function of lead time** — a strong feature, and a
-sellable analysis in its own right. Only covers 2026-03-26 onward; ERCOT
-retains ~6 months.
+**forecast error as a function of lead time** — a useful feature, and a
+self-contained analysis in its own right. Only covers 2026-03-26 onward;
+ERCOT retains ~6 months.
 
 ---
 

@@ -5,6 +5,9 @@ ERCOT data pipeline, a Pyomo battery optimiser benchmarked against what **129
 real batteries** actually did, and the gap between them decomposed into named
 pieces.
 
+*An independent study built entirely from ERCOT's public API. Every number
+below regenerates from the scripts in this repo.*
+
 <p align="center"><img src="optimization/results/fig_waterfall.png" width="720"></p>
 
 ## The headline
@@ -127,7 +130,7 @@ as regression tests in `tests/test_traps.py`:
 Energy and ancillary services **co-optimised** in one model — choosing between
 them each interval, the way ERCOT itself does post-RTC+B — priced against the
 full day-ahead and real-time award stack. That closes the measurement gap in
-the headline above and turns the benchmark into a revenue model.
+the headline above and makes the capture figure a total-revenue one.
 
 ## License
 

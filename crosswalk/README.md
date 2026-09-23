@@ -5,7 +5,9 @@ uses in dispatch data to the node it is priced at, and from there to the
 physical plant — county, coordinates, owner, nameplate, first year of operation.
 
 **Why it exists:** without it, curtailment data is about `BATCAVE_RN` and price
-data is about `GALO_RN1`, and neither is about a company you can call.
+data is about `GALO_RN1`, and neither can be tied to a real plant, a county, or
+an owner — so results can't be aggregated geographically or checked against any
+external source.
 
 ```
 python crosswalk/build.py          # rebuild everything, ~3 minutes

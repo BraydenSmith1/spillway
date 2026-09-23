@@ -1,9 +1,9 @@
 """
 congestion_attribution.py — congestion or oversupply? and which line?
 
-The brief (§1) says curtailment has two causes: a transmission line is full
-(congestion) or the region simply has too much power (oversupply). Only the
-first is tied to a place, which is what a site contract depends on.
+Curtailment has two causes: a transmission line is full (congestion) or the
+region simply has too much power (oversupply). Only the first is tied to a
+place, so only the first can be attributed to specific grid infrastructure.
 
 Shadow prices tell us which constraints were binding at every SCED run. This
 joins them to each unit's curtailed intervals on the exact SCED timestamp:

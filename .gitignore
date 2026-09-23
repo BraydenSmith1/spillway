@@ -6,8 +6,6 @@
 
 # Data — 7 GB and regenerable via scripts/download_all.py
 data/raw/
-data/clean/
-data/warehouse/
 data/ercot_api_spec.json
 
 # Runtime noise
@@ -25,8 +23,8 @@ __pycache__/
 data/external/
 crosswalk/staging/
 
-# Business plan — never publish
-spillway-master-brief.md
+# Private working notes — never published
+private/
 
 # DuckDB spill directory
 .duckdb_tmp/

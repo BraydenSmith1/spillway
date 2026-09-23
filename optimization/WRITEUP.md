@@ -309,7 +309,7 @@ Being explicit, because the gaps are where the next version lives:
    which needs the DAM ESR disclosure.
 2. **Perfect foresight is a yardstick, not a strategy.** Nobody has it. The
    realistic ceiling is somewhere between day-ahead-informed and perfect, and
-   the distance between them is exactly what a forecasting product is worth.
+   the distance between them measures what better price forecasting is worth.
 3. **Efficiency is a fleet average.** Individual units differ; a unit with
    88% round trip looks worse than it is against an 82% optimiser.
 4. **Degradation is a flat throughput charge**, not a depth-of-discharge or

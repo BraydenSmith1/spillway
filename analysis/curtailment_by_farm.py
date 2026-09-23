@@ -1,8 +1,8 @@
 """
 curtailment_by_farm.py — how much energy did each solar farm throw away?
 
-The first real measurement in this project. Replaces the 12% curtailment
-assumption in the master brief (§4.1) with a number from ERCOT's own data.
+The first real measurement in this project: per-farm curtailment measured
+from ERCOT's own dispatch data rather than assumed from published averages.
 
     python analysis/curtailment_by_farm.py
 
@@ -124,7 +124,6 @@ def main():
     print("\n" + "-" * 72)
     print(f"  These 5 farms alone threw away {total_wasted:,.0f} MWh in 12 months.")
     print(f"  Weighted average curtailment: {avg_pct:.1f}%")
-    print(f"  The master brief (SS4.1) assumes 12%.")
     print("-" * 72 + "\n")
 
 
