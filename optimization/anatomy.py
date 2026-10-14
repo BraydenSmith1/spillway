@@ -101,8 +101,7 @@ def main():
     w = wide(ud)
     c = components(w)
     assert c.check.abs().max() < 1e-6, "waterfall identity broken"
-    lines = []
-    say = lambda s="": (print(s), lines.append(s))
+    say = print
 
     # ---- denominators: one for the whole fleet so bars add ---------------------
     unit_days = c.groupby(level="unit").size()
@@ -211,8 +210,7 @@ def main():
     say(md(split))
     say("\nTop days: " + ", ".join(d.strftime("%Y-%m-%d") for d in sorted(top)))
 
-    (RES / f"anatomy_{a.tag}.md").write_text("\n".join(lines) + "\n")
-    print(f"\n-> {RES / f'anatomy_{a.tag}.md'}")
+    print(f"\n-> {RES / f'anatomy_units_{a.tag}.csv'}")
 
     # ---- figures ---------------------------------------------------------------------
     plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False})

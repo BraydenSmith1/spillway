@@ -2,7 +2,7 @@
 report.py — turn benchmark output into the tables and figures in WRITEUP.md.
 
 Reads optimization/results/summary_*.csv and unit_day_*.parquet, prints the
-markdown tables, and saves figures next to them.
+tables to stdout, and saves figures next to them.
 
     python -m optimization.report
 """
@@ -60,8 +60,7 @@ def md(df, floatfmt="{:,.1f}"):
 
 
 def main(tag="full"):
-    lines = []
-    say = lambda s="": (print(s), lines.append(s))
+    say = print
 
     df = unit_day(tag)
     annual, rev, days, kw = annualise(df)
@@ -144,8 +143,6 @@ def main(tag="full"):
     say("\nA large negative day usually means the unit charged into a price spike — "
         "a commissioning unit on a fixed test schedule, or a forced state-of-charge target.")
 
-    (RES / "tables.md").write_text("\n".join(lines) + "\n")
-    print(f"\ntables -> {RES/'tables.md'}")
 
     # ---- figures -----------------------------------------------------------
     plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False})

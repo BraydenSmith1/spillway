@@ -3,7 +3,7 @@ Regression tests for the data-quality traps found during the project.
 
 Each one produced a plausible-looking wrong answer before it was caught. The
 tests build tiny synthetic Parquet files so they run without the 9 GB dataset.
-See analysis/FINDINGS.md §9 for the story behind each.
+See "Joining these together — the traps" in DATA_DICTIONARY.md for each one.
 """
 
 from pathlib import Path

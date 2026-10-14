@@ -103,8 +103,7 @@ matched = con.sql("SELECT COUNT(*) FROM split").fetchone()[0]
 print(f"  {matched:,} matched to both LMP and lambda ({100*matched/n:.1f}%)", flush=True)
 
 # ---- outputs ---------------------------------------------------------------
-lines = []
-say = lambda s="": (print(s), lines.append(s))
+say = print
 
 say("## Oversupply vs congestion: fleet, Sep 2025 – Jul 2026\n")
 fleet = con.sql("""
@@ -160,7 +159,6 @@ keep = pd.concat([top_solar.head(12), top_wind.head(6)]).resource.tolist()
 piv = sm[sm.resource.isin(keep)].pivot(index="resource", columns="month", values="congestion_pct")
 say(piv.reindex(keep).to_markdown())
 
-(OUT / "lambda_split_tables.md").write_text("\n".join(lines) + "\n")
 site.to_parquet(OUT / "curtailment_lambda_split.parquet", index=False)
 sm.to_parquet(OUT / "curtailment_lambda_split_monthly.parquet", index=False)
-print(f"\n-> {OUT/'lambda_split_tables.md'}, curtailment_lambda_split*.parquet")
+print(f"\n-> {OUT}/curtailment_lambda_split*.parquet")

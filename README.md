@@ -5,8 +5,8 @@ ERCOT data pipeline, a Pyomo battery optimiser benchmarked against what **129
 real batteries** actually did, and the gap between them decomposed into named
 pieces.
 
-*An independent study built entirely from ERCOT's public API. Every number
-below regenerates from the scripts in this repo.*
+*A personal project, built out of curiosity from ERCOT's public API. Every
+number below regenerates from the scripts in this repo.*
 
 <p align="center"><img src="optimization/results/fig_waterfall.png" width="720"></p>
 
@@ -23,18 +23,7 @@ fully-ON unit-days, with commissioning and outage days excluded:
 | **Actual — what the batteries did (energy + reserves)** | **$21** | **42%** |
 | Perfect foresight — *the ceiling* | $49 | 100% |
 
-Including commissioning days, capture is 39%. **Where the gap went**,
-fleet-wide: 12% of the ceiling sat on days the unit wasn't fully operational,
-5% in the SOC window operators declared, 18% in reserves held, and 27% in
-dispatch. On a further quarter of the ceiling the unit's own offer set the
-price, where a price-taking ceiling isn't credible at all.
-
-**Read this as energy-arbitrage capture, not total revenue capture.** Reserve
-revenue here is priced at real-time MCPC only; ERCOT procures most ancillary
-services day-ahead at higher prices, and those awards need a disclosure this
-project hasn't pulled yet. Counting the full day-ahead stack would raise
-"actual" and narrow the gap. Method, results and the rest of the caveats:
-**[`optimization/WRITEUP.md`](optimization/WRITEUP.md)**.
+Method, results and caveats: [`optimization/WRITEUP.md`](optimization/WRITEUP.md).
 
 ## Why this isn't the usual battery tutorial
 
@@ -45,7 +34,7 @@ different:
    storage unit's dispatch and state of charge at 5-minute resolution. The
    optimiser is scored against real behaviour, not against itself.
 2. **It runs at each unit's own node**, via a resource→settlement-point
-   crosswalk validated against price behaviour — not a hub proxy.
+   crosswalk validated against price behaviour.
 3. **The LP shortcut is wrong in ERCOT.** Dropping the charge/discharge mode
    binaries ("efficiency makes simultaneous operation wasteful") holds only
    when prices are non-negative. ERCOT prices go negative 7% of the time, and
@@ -127,11 +116,4 @@ as regression tests in `tests/test_traps.py`:
 
 ## What's next
 
-Energy and ancillary services **co-optimised** in one model — choosing between
-them each interval, the way ERCOT itself does post-RTC+B — priced against the
-full day-ahead and real-time award stack. That closes the measurement gap in
-the headline above and makes the capture figure a total-revenue one.
-
-## License
-
-MIT.
+Energy and ancillary services **co-optimised** in one model.

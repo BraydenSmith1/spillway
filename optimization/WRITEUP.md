@@ -138,15 +138,12 @@ day, so it skips the first day of each run.
 
 ## Results
 
-> **Read this first (2026-09-23).** The tables in this section are the
-> original 30-unit run and include commissioning (`ONTEST`) unit-days; the
-> sensitivities below were run on that set and are kept consistent with it.
-> Two things changed after it was written. (1) Filtering to fully-ON
-> unit-days, as any published benchmark does, moves the 30-unit capture rate
-> from 39% to **45%**. The fleet-wide, status-filtered headline — 129 units,
-> 42.5% — and the decomposition of the remaining gap are in
-> **[`results/anatomy.md`](results/anatomy.md)**, which is what the README
-> now leads with. (2) Finding #5 was wrong and is rewritten below.
+> **Note.** The tables in this section are the original 30-unit run and
+> include commissioning (`ONTEST`) unit-days; the sensitivities were run on
+> that set and are kept consistent with it. Filtering to fully-ON unit-days,
+> as any benchmark should, moves the 30-unit capture rate from 39% to **45%**.
+> The fleet-wide, status-filtered figure (129 units, 42.5%) and the
+> decomposition of the remaining gap are in finding 9.
 
 ### Headline — 30 units, Dec 2025 – Jul 2026 (all unit-days)
 
@@ -234,8 +231,7 @@ And the sequel to "the money is in a handful of days" is that the *shortfall*
 is not: across the fleet, the 20 biggest perfect-foresight days carry 40% of
 the ceiling and 40% of the dispatch residual, and capture on those days (44%)
 was slightly *higher* than on the other 179 (42%). Dollar concentration is
-real; operating failure on spike days is not the story. See
-`results/anatomy.md` §5.
+real; operating failure on spike days is not the story.
 
 <p align="center"><img src="results/fig_example_day.png" width="720"></p>
 
@@ -279,7 +275,8 @@ outcome rather than the price of protecting the asset (finding 7), with the
 pieces named in finding 9.
 
 **9. Where the gap actually went.** Decomposing the ceiling-to-actual gap
-for all 129 active units (`results/anatomy.md`): **12%** of the ceiling sat
+for all 129 active units (`optimization/anatomy.py`; per-unit components in
+`results/anatomy_units_fleet.csv`): **12%** of the ceiling sat
 on unit-days the unit was not fully ON; **5%** is the SOC window operators
 declared; **18%** is reserves held, net of the AS revenue they earned at
 real-time prices — holding the unit's awards cost 26 points of ON-day energy

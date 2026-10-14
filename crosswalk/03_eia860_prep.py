@@ -11,23 +11,18 @@ The zip is cached under data/external/ so the build is repeatable offline.
 """
 
 from pathlib import Path
-import shutil, zipfile, urllib.request
+import zipfile, urllib.request
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 STG = ROOT / "crosswalk" / "staging"
 EXT = ROOT / "data" / "external" / "eia860"
 URL = "https://www.eia.gov/electricity/data/eia860/xls/eia8602025.zip"
-CACHE = Path("/private/tmp/claude-501/-Users-braydensmith-spillway/"
-             "4f656f7f-4dad-4bec-aad2-fabdfa1cc31d/scratchpad/eia860.zip")
 
 EXT.mkdir(parents=True, exist_ok=True)
 zpath = EXT / "eia8602025.zip"
 if not zpath.exists():
-    if CACHE.exists():
-        shutil.copy(CACHE, zpath)
-    else:
-        urllib.request.urlretrieve(URL, zpath)
+    urllib.request.urlretrieve(URL, zpath)
 with zipfile.ZipFile(zpath) as z:
     z.extractall(EXT)
 

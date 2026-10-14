@@ -4,8 +4,8 @@
 
 Schemas pulled directly from the Parquet files. Definitions of ERCOT's
 acronyms are my reading of the data plus standard market usage — **the ones
-marked ⚠️ are worth confirming against the ERCOT Nodal Protocols before you
-quote them to anyone.**
+marked ⚠️ are worth confirming against the ERCOT Nodal Protocols before
+leaning on them.**
 
 Quick look at any of these: `python scripts/peek.py <dataset> --cols`
 
@@ -193,7 +193,7 @@ Four measures, repeated for system-wide and each region:
 (`FINDINGS.md` §8). That's the benchmark any forecast product must beat.
 
 ⚠️ The exact percentile behind `WGRPP`/`PVGRPP` should be confirmed in the
-protocols before being described publicly.
+protocols before being relied on.
 
 ---
 
@@ -234,11 +234,64 @@ ERCOT retains ~6 months.
 
 ## Derived: `crosswalk/crosswalk.csv` (21 cols)
 
-Not from ERCOT — built by `crosswalk/build.py`. Links a `Resource Name` to
-its `settlement_point` and, where resolvable, to the physical plant:
-`county`, `latitude`, `longitude`, `owner`, `utility`, `operating_year`,
-`plant_nameplate_mw`. The `sp_method` and `eia_method` columns record how each
-link was made so you can filter by confidence. See `crosswalk/README.md`.
+Not from ERCOT — built by `crosswalk/build.py` (~3 min). Links a
+`Resource Name` to its `settlement_point` and, where resolvable, to the
+physical plant: `county`, `latitude`, `longitude`, `owner`, `utility`,
+`operating_year`, `plant_nameplate_mw`.
+
+| Column | Source | Method field |
+|---|---|---|
+| `fuel`, `qse`, `dme`, `max_hsl_mw` | our own SCED data | — |
+| `settlement_point` | name-stem match to price data; EIA's node field where naming failed | `sp_method`: `exact` / `lcpN` / `eia_node` / `none` |
+| plant columns above | EIA Form 860 (2025), ERCOT balancing area only | `eia_method`: `eia_node` / `name+mw` / `mw` / `name` / `alias`; `eia_score` is the evidence total (max 9) |
+
+Coverage as built 2026-09-14: node link 93% of solar, 89% of wind, 86% of
+storage; plant link 33% / 47% / 45%. Read the two differently. The **node
+link is strong** — every link was tested against price behaviour (a unit's
+node price should sag while it is curtailed) and all of them show that
+signature. The **plant link is partial**: ERCOT stems are often acronyms or
+SPV names (`REDBARN`, `SPTX12B`) that no string method matches to EIA-860.
+`crosswalk/aliases_todo.csv` lists the unplaced sites ranked by curtailed MWh;
+to resolve one, find its `plant_code` in EIA-860, add a row to
+`crosswalk/aliases.csv`, and rebuild. Aliases override every automated match.
+
+Limitations: ERCOT's official mapping (NP4-160-SG) sits behind an MIS login
+and was not used; EIA-860 is annual, so plants commissioned after its snapshot
+are absent; a stem can group units that EIA splits into separate plants.
+
+---
+
+## Derived: `registry/storage.csv` and `registry/generation.csv`
+
+One row per ERCOT unit, built by `crosswalk/07_registry.py`. Every external
+attribute carries a method column recording how the link was made.
+
+**`storage.csv`** — every unit in the 60-day ESR disclosure (Dec 2025 →):
+
+| Column | Meaning | Source |
+|---|---|---|
+| `unit`, `node` | ERCOT resource name; settlement point priced at (name-stem match) | ESR disclosure, `optimization/data.py` |
+| `p_dis_mw`, `p_chg_mw`, `soc_max_mwh`, `soc_min_mwh`, `duration_h` | max discharge / charge observed (HSL, −LSL); declared SOC window; `soc_max / p_dis` | telemetry maxima / minima |
+| `county`, `owner` | physical plant (≈45% resolved) | EIA-860 via the crosswalk |
+| `qse`, `dme` | scheduling / decision-making entity codes | ESR disclosure |
+| `first_seen`, `last_seen`, `days_seen`, `active_days`, `on_share` | presence; days with \|Base Point\| > 1 MW; share of 5-min rows with status ON | ESR disclosure |
+| `benchmarked`, `capture_all_pct`, `capture_on_pct` | in the capture-gap anatomy; actual ÷ perfect-foresight ceiling on all / fully-ON unit-days | `optimization/anatomy.py` |
+| `gap_window_pct`, `gap_reserves_net_pct`, `gap_dispatch_pct` | the anatomy's components as % of the unit's ON-day ceiling | `optimization/anatomy.py` |
+
+**`generation.csv`** — every wind and solar unit in the SCED disclosure:
+
+| Column | Meaning | Source |
+|---|---|---|
+| `resource`, `fuel`, `qse`, `dme`, `max_hsl_mw`, `first_seen`, `last_seen` | | SCED disclosure |
+| `settlement_point`, `sp_method` | price node and how it was linked | crosswalk |
+| `plant_name`, `county`, `latitude`, `longitude`, `owner`, `utility`, `plant_nameplate_mw`, `operating_year`, `eia_method`, `eia_score` | physical plant and link evidence | EIA-860 via the crosswalk |
+| `curtailed_gwh_12mo`, `curtailment_pct_12mo` | `HSL − Base Point`, Aug 2025 – Jul 2026, status ON, interval length derived per day | `analysis/curtailment_by_county_owner.py` |
+| `congestion_pct`, `oversupply_pct` | share of curtailed MWh with Lambda > 0 and own-node LMP < 0 vs Lambda ≤ 0 | `analysis/curtailment_lambda_split.py` |
+
+Storage node links are by name stem and were not individually validated the
+way generation links were; treat a storage `node` as probable, not certain.
+Benchmark columns are price-taking ceilings at the unit's own node with AS
+revenue at real-time MCPC only. SCED data lags 60 days; nothing here is current.
 
 ---
 
